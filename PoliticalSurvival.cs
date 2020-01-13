@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.4.1")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.4.2")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
@@ -34,57 +34,57 @@ namespace Oxide.Plugins
                 realm = rlm;
             }
             public Settings() { }
-            public Settings setTaxContainerVector3(Vector3 vec)
+            public Settings SetTaxContainerVector3(Vector3 vec)
             {
                 taxContainerVector3 = vec;
                 return this;
             }
-            public Vector3 getTaxContainerVector3()
+            public Vector3 GetTaxContainerVector3()
             {
                 return taxContainerVector3;
             }
-            public Settings setTaxContainerID(uint storage)
+            public Settings SetTaxContainerID(uint storage)
             {
                 taxContainerID = storage;
                 return this;
             }
-            public uint getTaxContainerID()
+            public uint GetTaxContainerID()
             {
                 return taxContainerID;
             }
-            public Settings setTaxLevel(double tx)
+            public Settings SetTaxLevel(double tx)
             {
                 tax = tx;
                 return this;
             }
-            public double getTaxLevel()
+            public double GetTaxLevel()
             {
                 return tax;
             }
-            public Settings setRuler(ulong rlr)
+            public Settings SetRuler(ulong rlr)
             {
                 ruler = rlr;
                 return this;
             }
-            public ulong getRuler()
+            public ulong GetRuler()
             {
                 return ruler;
             }
-            public Settings setRulerName(string name)
+            public Settings SetRulerName(string name)
             {
                 rulerName = name;
                 return this;
             }
-            public string getRulerName()
+            public string GetRulerName()
             {
                 return rulerName;
             }
-            public Settings setRealmName(string rlm)
+            public Settings SetRealmName(string rlm)
             {
                 realm = rlm;
                 return this;
             }
-            public string getRealmName()
+            public string GetRealmName()
             {
                 return realm;
             }
@@ -104,28 +104,28 @@ namespace Oxide.Plugins
             Puts("Political Survival is starting...");
 
 
-            Puts("Realm name is " + settings.getRealmName());
-            Puts("Tax level is " + settings.getTaxLevel());
-            Puts("Ruler is " + settings.getRuler());
-            Puts("TaxChest is set " + !settings.getTaxContainerVector3().Equals(Vector3.negativeInfinity));
+            Puts("Realm name is " + settings.GetRealmName());
+            Puts("Tax level is " + settings.GetTaxLevel());
+            Puts("Ruler is " + settings.GetRuler());
+            Puts("TaxChest is set " + !settings.GetTaxContainerVector3().Equals(Vector3.negativeInfinity));
             Puts("Political Survival: Started");
         }
 
         void OnPlayerInit(BasePlayer player)
         {
-            if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerConnected", this, player.UserIDString) + " " + settings.getRealmName());
+            if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerConnected", this, player.UserIDString) + " " + settings.GetRealmName());
         }
 
-        void OnPlayerDisconnected(BasePlayer player, string Reason)
+        void OnPlayerDisconnected(BasePlayer player, string reason)
         {
-            if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.getRealmName());
+            if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
         }
 
         #region GatheringHooks
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             DebugLog("OnDispenserGather start");
-            if (dispenser == null || entity == null || Item == null || settings.getTaxContainerID() == 0) return;
+            if (dispenser == null || entity == null || Item == null || settings.GetTaxContainerID() == 0) return;
             BasePlayer player = entity as BasePlayer;
             DebugLog("OnDispenserGather stage 2 " + item.flags.ToString() + " " + item.amount + " " + player.displayName);
             int netAmount = AddToTaxContainer(item, player.displayName);
@@ -145,11 +145,11 @@ namespace Oxide.Plugins
             int netAmount = AddToTaxContainer(item, player.displayName);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
-        private void OnQuarryGather(MiningQuarry quarry, Item Item)
+        private void OnQuarryGather(MiningQuarry quarry, Item item)
         {
             DebugLog("OnQuarryGather start");
-            int netAmount = AddToTaxContainer(Item, quarry.name);
-            Item.amount = (netAmount > 0) ? netAmount : Item.amount;
+            int netAmount = AddToTaxContainer(item, quarry.name);
+            item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
 
 
@@ -177,23 +177,23 @@ namespace Oxide.Plugins
         int AddToTaxContainer(Item item, string displayName)
         {
             DebugLog("AddToTaxContainer start");
-            if (item == null || settings.getTaxContainerID() == 0) return -1;
-            if (settings.getTaxLevel() == 0 || settings.getRuler() == 0) return -1;
-            if ((settings.getTaxContainerVector3() == Vector3.negativeInfinity && FindStorageContainer(settings.getTaxContainerID()) != null)
-                || settings.getTaxContainerID() == 0 || settings.getTaxContainerVector3() == Vector3.negativeInfinity)
+            if (item == null || settings.GetTaxContainerID() == 0) return -1;
+            if (settings.GetTaxLevel() == 0 || settings.GetRuler() == 0) return -1;
+            if ((settings.GetTaxContainerVector3() == Vector3.negativeInfinity && FindStorageContainer(settings.GetTaxContainerID()) != null)
+                || settings.GetTaxContainerID() == 0 || settings.GetTaxContainerVector3() == Vector3.negativeInfinity)
             {
-                settings.setTaxContainerID(0).setTaxContainerVector3(Vector3.negativeInfinity);
+                settings.SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity);
                 SaveSettings();
                 Puts("There were no tax container set");
                 return -1;
             }
 
             ItemDefinition ToAdd = ItemManager.FindItemDefinition(item.info.itemid);
-            int Tax = Convert.ToInt32(Math.Round((item.amount * settings.getTaxLevel()) / 100));
+            int Tax = Convert.ToInt32(Math.Round((item.amount * settings.GetTaxLevel()) / 100));
 
             if (ToAdd != null)
             {
-                FindStorageContainer(settings.getTaxContainerID()).inventory.AddItem(ToAdd, Tax);
+                FindStorageContainer(settings.GetTaxContainerID()).inventory.AddItem(ToAdd, Tax);
             }
 
             DebugLog("User " + displayName + " gathered " + item.amount + " x " + item.info.shortname + ", and " + Tax + " was taxed");
@@ -222,7 +222,7 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        settings.setRuler(0).setRulerName(null);
+                        settings.SetRuler(0).SetRulerName(null);
                         PrintToChat(string.Format(lang.GetMessage("RulerDied", this)));
                     }
                 }
@@ -253,7 +253,7 @@ namespace Oxide.Plugins
                     if (boxStorage != null)
                     {
                         DebugLog("Test 4");
-                        settings.setTaxContainerVector3(boxPosition).setTaxContainerID(entity.net.ID);
+                        settings.SetTaxContainerVector3(boxPosition).SetTaxContainerID(entity.net.ID);
 
                         if (entity.ShortPrefabName.Contains("box.wooden"))
                         {
@@ -285,9 +285,9 @@ namespace Oxide.Plugins
         {
             string RulerName = string.Empty;
 
-            if (settings.getRuler() > 0)
+            if (settings.GetRuler() > 0)
             {
-                BasePlayer BaseRuler = BasePlayer.FindAwakeOrSleeping(settings.getRuler().ToString());
+                BasePlayer BaseRuler = BasePlayer.FindAwakeOrSleeping(settings.GetRuler().ToString());
                 RulerName = BaseRuler != null ? BaseRuler.displayName : lang.GetMessage("ClaimRuler", this, player.UserIDString);
             }
             else
@@ -296,27 +296,27 @@ namespace Oxide.Plugins
             }
 
 
-            if (settings.getRuler() != 0)
+            if (settings.GetRuler() != 0)
             {
-                SendReply(player, lang.GetMessage("InfoRuler", this, player.UserIDString) + ": " + settings.getRulerName());
+                SendReply(player, lang.GetMessage("InfoRuler", this, player.UserIDString) + ": " + settings.GetRulerName());
             }
             else
             {
-                SendReply(player, lang.GetMessage("ClaimRuler", this, player.UserIDString) + ": " + settings.getRulerName());
+                SendReply(player, lang.GetMessage("ClaimRuler", this, player.UserIDString) + ": " + settings.GetRulerName());
             }
-            SendReply(player, lang.GetMessage("InfoRealmName", this, player.UserIDString) + ": " + settings.getRealmName());
-            SendReply(player, lang.GetMessage("InfoTaxLevel", this, player.UserIDString) + ": " + settings.getTaxLevel() + "%");
+            SendReply(player, lang.GetMessage("InfoRealmName", this, player.UserIDString) + ": " + settings.GetRealmName());
+            SendReply(player, lang.GetMessage("InfoTaxLevel", this, player.UserIDString) + ": " + settings.GetTaxLevel() + "%");
             if (IsRuler(player.userID))
             {
                 SendReply(player, lang.GetMessage("SettingNewTaxChest", this, player.UserIDString));
-                SendReply(player, lang.GetMessage("InfoTaxCmd", this, player.UserIDString) + ": " + settings.getTaxLevel() + "%");
+                SendReply(player, lang.GetMessage("InfoTaxCmd", this, player.UserIDString) + ": " + settings.GetTaxLevel() + "%");
             }
         }
 
         [ChatCommand("claimruler")]
         void ClaimRuler(BasePlayer player, string command, string[] arguments)
         {
-            if (settings.getRuler() < 1)
+            if (settings.GetRuler() < 1)
             {
                 PrintToChat("<color=#008080ff><b>" + player.displayName + "</b></color> " + lang.GetMessage("IsNowRuler", this));
                 SetRuler(player);
@@ -331,8 +331,8 @@ namespace Oxide.Plugins
                 double newTaxLevel = 0.0;
                 if (double.TryParse(MergeParams(0, arguments), out newTaxLevel))
                 {
-                    Puts("Tax have been changed by " + player.displayName + " from " + settings.getTaxLevel() + " to " + newTaxLevel);
-                    if (newTaxLevel == settings.getTaxLevel())
+                    Puts("Tax have been changed by " + player.displayName + " from " + settings.GetTaxLevel() + " to " + newTaxLevel);
+                    if (newTaxLevel == settings.GetTaxLevel())
                         return;
 
                     if (newTaxLevel > TaxMax)
@@ -401,19 +401,19 @@ namespace Oxide.Plugins
 
         bool IsRuler(ulong steamId)
         {
-            return settings.getRuler() == steamId;
+            return settings.GetRuler() == steamId;
         }
 
         void SetRuler(BasePlayer ruler)
         {
             Puts("New Ruler!");
-            settings.setRuler(ruler.userID).setRulerName(ruler.displayName).setTaxContainerID(0).setTaxContainerVector3(Vector3.negativeInfinity);
+            settings.SetRuler(ruler.userID).SetRulerName(ruler.displayName).SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity);
             SaveSettings();
         }
 
         void SetTaxLevel(double newTaxLevel)
         {
-            settings.setTaxLevel(newTaxLevel);
+            settings.SetTaxLevel(newTaxLevel);
             SaveSettings();
         }
 
@@ -422,7 +422,7 @@ namespace Oxide.Plugins
             if (newName.Length > 36)
                 newName = newName.Substring(0, 36);
             PrintToChat(string.Format(lang.GetMessage("RealmRenamed", this), newName));
-            settings.setRealmName(newName);
+            settings.SetRealmName(newName);
             SaveSettings();
         }
 
@@ -434,7 +434,7 @@ namespace Oxide.Plugins
                 if (ContPosition == position)
                 {
                     Puts("Tax Container instance found: " + cont.GetEntity().GetInstanceID());
-                    settings.setTaxContainerID(cont.net.ID);
+                    settings.SetTaxContainerID(cont.net.ID);
                     return cont;
                 }
             }
@@ -448,7 +448,7 @@ namespace Oxide.Plugins
 
         void SaveSettings()
         {
-            Puts(settings.getRulerName());
+            Puts(settings.GetRulerName());
             Interface.Oxide.DataFileSystem.WriteObject<Settings>("PoliticalSurvivalSettings", settings, true);
         }
 
@@ -463,11 +463,11 @@ namespace Oxide.Plugins
             {
                 Puts("Settings doesn't exist, creating default");
                 settings = new Settings()
-                .setRuler(0)
-                .setRealmName(lang.GetMessage("DefaultRealm", this))
-                .setTaxLevel(0.0)
-                .setTaxContainerID(0)
-                .setTaxContainerVector3(Vector3.negativeInfinity);
+                .SetRuler(0)
+                .SetRealmName(lang.GetMessage("DefaultRealm", this))
+                .SetTaxLevel(0.0)
+                .SetTaxContainerID(0)
+                .SetTaxContainerVector3(Vector3.negativeInfinity);
                 SaveSettings();
             }
         }
