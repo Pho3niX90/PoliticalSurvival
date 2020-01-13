@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.4.0")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.4.1")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
