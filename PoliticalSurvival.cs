@@ -407,7 +407,7 @@ namespace Oxide.Plugins
         void SetRuler(BasePlayer ruler)
         {
             Puts("New Ruler!");
-            settings.setRuler(ruler.userID).setRulerName(ruler.displayName);
+            settings.setRuler(ruler.userID).setRulerName(ruler.displayName).setTaxContainerID(0).setTaxContainerVector3(Vector3.negativeInfinity);
             SaveSettings();
         }
 
