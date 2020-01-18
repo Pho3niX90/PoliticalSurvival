@@ -211,7 +211,10 @@ namespace Oxide.Plugins {
 
         [ChatCommand("taxrange")]
         void AdmSetTaxChestCommand(BasePlayer player, string command, string[] arguments) {
-
+            if(player.IsAdmin && arguments.Length == 2) {
+                int.TryParse(arguments[0], out settings.taxMin);
+                int.TryParse(arguments[1], out settings.taxMax);
+            }
         }
 
         [ChatCommand("settaxchest")]
