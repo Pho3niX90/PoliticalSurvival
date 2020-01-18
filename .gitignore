@@ -262,3 +262,5 @@ __pycache__/
 /PoliticalSurvival.sln
 /PoliticalSurvival.csproj
 .gitignore
+/MagicLoot.cs
+/MagicLoot.json

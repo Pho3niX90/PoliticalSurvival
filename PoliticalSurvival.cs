@@ -5,7 +5,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.4.3")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.4.4")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -187,7 +187,7 @@ namespace Oxide.Plugins {
                     if (info != null)
                         killer = info.Initiator.ToPlayer();
 
-                    if (killer != null && killer.userID != player.userID && (killer is BasePlayer)) {
+                    if (killer != null && killer.userID != player.userID && !(player is NPCPlayer)) {
                         SetRuler(killer);
                         PrintToChat(string.Format(lang.GetMessage("RulerMurdered", this), killer.displayName));
                     } else {
