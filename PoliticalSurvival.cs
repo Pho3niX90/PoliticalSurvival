@@ -5,7 +5,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.4.4")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.4.5")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -20,15 +20,20 @@ namespace Oxide.Plugins {
             public ulong ruler;
             public string rulerName;
             public string realm;
+            public int taxMin;
+            public int taxMax;
 
-            public Settings(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm) {
+            public Settings(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm, int taxMi, int taxMx) {
                 taxContainerVector3 = tcv4;
                 taxContainerID = txId;
                 tax = tx;
                 ruler = rlr;
                 rulerName = rlrname;
                 realm = rlm;
+                taxMin = taxMi;
+                taxMax = taxMx;
             }
+
             public Settings() { }
             public Settings SetTaxContainerVector3(Vector3 vec) {
                 taxContainerVector3 = vec;
@@ -72,13 +77,16 @@ namespace Oxide.Plugins {
             public string GetRealmName() {
                 return realm;
             }
+            public int GetTaxMin() {
+                return taxMin;
+            }
+            public int GetTaxMax() {
+                return taxMax == 0 ? 95 : taxMax;
+            }
         }
         #endregion
         #region Variables
         Dictionary<string, string> serverMessages;
-
-        double TaxMin = 0.0;
-        double TaxMax = 95.0;
         #endregion
 
         private void Init() {
@@ -117,12 +125,14 @@ namespace Oxide.Plugins {
             int netAmount = AddToTaxContainer(item, player.displayName);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
+
         private void OnDispenserBonus(ResourceDispenser dispenser, BaseEntity entity, Item item) {
             BasePlayer player = entity as BasePlayer;
             DebugLog("OnDispenserBonus start");
             int netAmount = AddToTaxContainer(item, player.displayName);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
+
         private void OnQuarryGather(MiningQuarry quarry, Item item) {
             DebugLog("OnQuarryGather start");
             int netAmount = AddToTaxContainer(item, quarry.name);
@@ -196,6 +206,12 @@ namespace Oxide.Plugins {
                     }
                 }
             }
+            SaveSettings();
+        }
+
+        [ChatCommand("taxrange")]
+        void AdmSetTaxChestCommand(BasePlayer player, string command, string[] arguments) {
+
         }
 
         [ChatCommand("settaxchest")]
@@ -239,7 +255,7 @@ namespace Oxide.Plugins {
             }
         }
 
-        [ChatCommand("pinfo")]
+        [ChatCommand("rinfo")]
         void InfoCommand(BasePlayer player, string command, string[] arguments) {
             string RulerName = string.Empty;
 
@@ -260,7 +276,7 @@ namespace Oxide.Plugins {
             SendReply(player, lang.GetMessage("InfoTaxLevel", this, player.UserIDString) + ": " + settings.GetTaxLevel() + "%");
             if (IsRuler(player.userID)) {
                 SendReply(player, lang.GetMessage("SettingNewTaxChest", this, player.UserIDString));
-                SendReply(player, lang.GetMessage("InfoTaxCmd", this, player.UserIDString) + ": " + settings.GetTaxLevel() + "%");
+                SendReply(player, string.Format(lang.GetMessage("InfoTaxCmd", this, player.UserIDString), settings.GetTaxMin(), settings.GetTaxMax()) + ": " + settings.GetTaxLevel() + "%");
             }
         }
 
@@ -281,10 +297,10 @@ namespace Oxide.Plugins {
                     if (newTaxLevel == settings.GetTaxLevel())
                         return;
 
-                    if (newTaxLevel > TaxMax)
-                        newTaxLevel = TaxMax;
-                    else if (newTaxLevel < TaxMin)
-                        newTaxLevel = TaxMin;
+                    if (newTaxLevel > settings.GetTaxMax())
+                        newTaxLevel = settings.GetTaxMax();
+                    else if (newTaxLevel < settings.GetTaxMin())
+                        newTaxLevel = settings.GetTaxMin();
 
                     SetTaxLevel(newTaxLevel);
                     PrintToChat(string.Format(lang.GetMessage("UpdateTaxMessage", this), player.displayName, newTaxLevel));
@@ -305,13 +321,18 @@ namespace Oxide.Plugins {
                 SendReply(player, lang.GetMessage("RulerError", this, player.UserIDString));
         }
 
-        [ChatCommand("pplayers")]
+        [ChatCommand("rplayers")]
         void PlayersCommand(BasePlayer player, string command, string[] arguments) {
             StringBuilder builder = new StringBuilder();
             int playerCount = BasePlayer.activePlayerList.Count;
 
             builder.Append(string.Format(lang.GetMessage("OnlinePlayers", this), playerCount) + " ");
-            builder.Append(String.Join(", ", BasePlayer.activePlayerList));
+            List<string> players = new List<string>();
+            
+            foreach (BasePlayer pl in BasePlayer.activePlayerList) {
+                players.Add(pl.displayName);
+            }
+            builder.Append(String.Join(", ", players));
 
             SendReply(player, builder.ToString());
         }
@@ -400,7 +421,7 @@ namespace Oxide.Plugins {
         }
         private void LoadServerMessages() {
             serverMessages = new Dictionary<string, string>();
-            serverMessages.Add("StartingInformation", "<color=yellow>Welcome to {0}</color>. If you are new, we run a custom plugin where you can become the server Ruler, tax players, and control the economy. Type /pinfo for more information.");
+            serverMessages.Add("StartingInformation", "<color=yellow>Welcome to {0}</color>. If you are new, we run a custom plugin where you can become the server Ruler, tax players, and control the economy. Type <color=#008080ff>/rinfo</color> for more information.");
             serverMessages.Add("PlayerConnected", "has connected to");
             serverMessages.Add("PlayerDisconnected", "has disconnected from");
             serverMessages.Add("RulerDied", "<color=#ff0000ff>The Ruler has died!</color>");
@@ -420,7 +441,7 @@ namespace Oxide.Plugins {
             serverMessages.Add("InfoRuler", "Ruler");
             serverMessages.Add("InfoRealmName", "Realm Name");
             serverMessages.Add("InfoTaxLevel", "Tax level");
-            serverMessages.Add("InfoTaxCmd", "Use <color=#008080ff>/settax 0-95</color> to set tax level");
+            serverMessages.Add("InfoTaxCmd", "Use <color=#008080ff>/settax {0}-{1}</color> to set tax level");
             serverMessages.Add("UpdateTaxMessage", "Ruler {0} has set Tax to {1}%");
             lang.RegisterMessages(serverMessages, this);
         }
