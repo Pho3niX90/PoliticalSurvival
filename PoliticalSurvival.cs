@@ -189,7 +189,7 @@ namespace Oxide.Plugins {
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info) {
             DebugLog("OnEntityDeath start");
             BasePlayer player = entity.ToPlayer();
-
+             
             if (player != null) {
                 if (IsRuler(player.userID)) {
                     BasePlayer killer = null;
