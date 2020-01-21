@@ -1,4 +1,5 @@
 using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -544,7 +545,7 @@ namespace Oxide.Plugins {
         }
 
         BasePlayer GetPlayer(string partialNameOrID) {
-            return covalence.Players.FindPlayer(partialNameOrID).Object as BasePlayer;
+            return BasePlayer.Find(partialNameOrID);
         }
 
         string MergeParams(int start, string[] paramz) {
