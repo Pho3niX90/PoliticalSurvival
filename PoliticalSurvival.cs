@@ -1,5 +1,4 @@
 using Oxide.Core;
-using Oxide.Core.Libraries.Covalence;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -147,7 +146,7 @@ namespace Oxide.Plugins {
         public bool NotifyPlayers = true;
         public BasePlayer target;
         #endregion
-        
+
         class HeliComponent : FacepunchBehaviour {
             private BaseHelicopter heli;
             private PatrolHelicopterAI AI;
@@ -162,6 +161,7 @@ namespace Oxide.Plugins {
                 heli.startHealth = _instance.HeliBaseHealth;
                 AI.maxSpeed = Mathf.Clamp(_instance.HeliSpeed, 0.1f, _instance.HeliSpeedMax);
                 AI.numRocketsLeft = _instance.NumRockets;
+
                 attachGuns(AI);
                 timerAdd = (Time.realtimeSinceStartup + Convert.ToSingle(_instance.HeliLifeTimeMinutes * 60));
                 InvokeRepeating("ScanForTargets", _instance.ScanFrequencySeconds, _instance.ScanFrequencySeconds);
@@ -183,9 +183,21 @@ namespace Oxide.Plugins {
             internal void ScanForTargets() {
                 foreach (ulong targetSteamId in _instance.target.Team.members) {
                     BasePlayer teamMemberToAttack = BasePlayer.Find(targetSteamId.ToString());
+
                     if (teamMemberToAttack.IsConnected)
                         UpdateTargets(teamMemberToAttack);
+
+                    UpdateAi();
                 }
+            }
+
+            void UpdateAi() {
+                AI.UpdateTargetList();
+                AI.MoveToDestination();
+                AI.UpdateRotation();
+                AI.UpdateSpotlight();
+                AI.AIThink();
+                AI.DoMachineGuns();
             }
 
             void UpdateTargets(BasePlayer Player) {
@@ -387,14 +399,15 @@ namespace Oxide.Plugins {
         void HeliCommmand(BasePlayer player, string command, string[] args) {
             if (!IsRuler(player.userID)) { PrintToChat(player, "You aren't the boss"); return; }
             if (args.Length != 1) { PrintToChat(player, "Usage '/heli player' where player can also be partial name"); return; }
-
+            Puts("1");
             BasePlayer playerToAttack = GetPlayer(args[0]);
             if (playerToAttack == null) { PrintToChat(player, "player \"{0}\" not found, or ambiguous", args[0]); return; }
-
+            Puts("Heli found player");
             if (!CanAffordheliStrike(player)) {
+                Puts("Cant afford");
                 PrintToChat(player, "Ordering a heli strike costs {0} {1}", settings.GetHeliCostQty(), ItemManager.FindItemDefinition(settings.GetHeliCostItem()).displayName.english); return;
             }
-
+            Puts("Can afford");
             int heliCount = UnityEngine.Object.FindObjectsOfType<BaseHelicopter>().Count();
             if (heliCount >= settings.GetMaxHelis()) {
                 PrintToChat(player, "Insufficient airspace for more than {0} helicopters, please wait for existing patrols to complete", settings.GetMaxHelis()); return;
@@ -575,6 +588,7 @@ namespace Oxide.Plugins {
             //spawn the birdie
             BaseHelicopter ent = GameManager.server.CreateEntity("assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab", new Vector3(), new Quaternion(), true) as BaseHelicopter;
             if (ent != null && playerToAttack != null) {
+                target = playerToAttack;
                 ent.GetComponent<PatrolHelicopterAI>().SetInitialDestination(playerToAttack.transform.position + new Vector3(0.0f, 10f, 0.0f), 0.25f);
                 ent.Spawn();
                 ent.gameObject.AddComponent<HeliComponent>();
