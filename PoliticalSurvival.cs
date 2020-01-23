@@ -285,6 +285,9 @@ namespace Oxide.Plugins {
 
         void Unload() {
             Puts("Unload called");
+
+            SaveSettings();
+
             foreach (Timer t in timers.Values)
                 t.Destroy();
             timers.Clear();
