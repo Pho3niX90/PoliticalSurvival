@@ -186,14 +186,14 @@ namespace Oxide.Plugins {
 
                     if (teamMemberToAttack.IsConnected) {
                         UpdateTargets(teamMemberToAttack);
-                        _instance.Puts("Heli target found " + teamMemberToAttack);
+                        _instance.DebugLog("Heli target found " + teamMemberToAttack);
                     }
                     UpdateAi();
                 }
             }
 
             void UpdateAi() {
-                _instance.Puts("Heli updating AI");
+                _instance.DebugLog("Heli updating AI");
                 AI.UpdateTargetList();
                 AI.MoveToDestination();
                 AI.UpdateRotation();
@@ -402,15 +402,15 @@ namespace Oxide.Plugins {
         void HeliCommmand(BasePlayer player, string command, string[] args) {
             if (!IsRuler(player.userID)) { PrintToChat(player, "You aren't the boss"); return; }
             if (args.Length != 1) { PrintToChat(player, "Usage '/heli player' where player can also be partial name"); return; }
-            Puts("1");
+
             BasePlayer playerToAttack = GetPlayer(args[0]);
             if (playerToAttack == null) { PrintToChat(player, "player \"{0}\" not found, or ambiguous", args[0]); return; }
-            Puts("Heli found player");
+
             if (!CanAffordheliStrike(player)) {
                 Puts("Cant afford");
                 PrintToChat(player, "Ordering a heli strike costs {0} {1}", settings.GetHeliCostQty(), ItemManager.FindItemDefinition(settings.GetHeliCostItem()).displayName.english); return;
             }
-            Puts("Can afford");
+
             int heliCount = UnityEngine.Object.FindObjectsOfType<BaseHelicopter>().Count();
             if (heliCount >= settings.GetMaxHelis()) {
                 PrintToChat(player, "Insufficient airspace for more than {0} helicopters, please wait for existing patrols to complete", settings.GetMaxHelis()); return;
