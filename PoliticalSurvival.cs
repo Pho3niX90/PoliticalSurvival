@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.0")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.5.1")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -176,7 +176,7 @@ namespace Oxide.Plugins {
                 if (isRetiring && isFlying) {
                     CancelInvoke("ScanForTargets");
                     isFlying = false;
-                    heliRetire(AI);
+                    heliRetire();
                 }
             }
 
@@ -184,14 +184,16 @@ namespace Oxide.Plugins {
                 foreach (ulong targetSteamId in _instance.target.Team.members) {
                     BasePlayer teamMemberToAttack = BasePlayer.Find(targetSteamId.ToString());
 
-                    if (teamMemberToAttack.IsConnected)
+                    if (teamMemberToAttack.IsConnected) {
                         UpdateTargets(teamMemberToAttack);
-
+                        _instance.Puts("Heli target found " + teamMemberToAttack);
+                    }
                     UpdateAi();
                 }
             }
 
             void UpdateAi() {
+                _instance.Puts("Heli updating AI");
                 AI.UpdateTargetList();
                 AI.MoveToDestination();
                 AI.UpdateRotation();
@@ -219,7 +221,7 @@ namespace Oxide.Plugins {
                 }
             }
 
-            internal void heliRetire(PatrolHelicopterAI helicopter) {
+            internal void heliRetire() {
                 AI.Retire();
             }
 
@@ -245,6 +247,7 @@ namespace Oxide.Plugins {
         #endregion
 
         private void Init() {
+            _instance = this;
             LoadServerMessages();
             LoadSettings();
             Puts("Political Survival is starting...");
@@ -592,6 +595,8 @@ namespace Oxide.Plugins {
                 ent.GetComponent<PatrolHelicopterAI>().SetInitialDestination(playerToAttack.transform.position + new Vector3(0.0f, 10f, 0.0f), 0.25f);
                 ent.Spawn();
                 ent.gameObject.AddComponent<HeliComponent>();
+
+                timer.Once(HeliLifeTimeMinutes * 60, () => ent.GetComponent<HeliComponent>().heliRetire());
             }
         }
 
