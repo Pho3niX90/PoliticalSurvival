@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.1")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.5.2")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -513,6 +513,7 @@ namespace Oxide.Plugins {
             if (IsRuler(player.userID)) {
                 double newTaxLevel = 0.0;
                 if (double.TryParse(MergeParams(0, arguments), out newTaxLevel)) {
+                    double oldTax = settings.GetTaxLevel();
                     Puts("Tax have been changed by " + player.displayName + " from " + settings.GetTaxLevel() + " to " + newTaxLevel);
                     if (newTaxLevel == settings.GetTaxLevel())
                         return;
@@ -523,7 +524,7 @@ namespace Oxide.Plugins {
                         newTaxLevel = settings.GetTaxMin();
 
                     SetTaxLevel(newTaxLevel);
-                    PrintToChat(string.Format(lang.GetMessage("UpdateTaxMessage", this), player.displayName, newTaxLevel));
+                    PrintToChat(string.Format(lang.GetMessage("UpdateTaxMessage", this), oldTax, newTaxLevel));
                 }
             } else
                 SendReply(player, lang.GetMessage("RulerError", this, player.UserIDString));
@@ -809,6 +810,7 @@ namespace Oxide.Plugins {
             serverMessages.Add("InfoTaxCmd", "Use <color=#008080ff>/settax {0}-{1}</color> to set tax level");
             serverMessages.Add("RulerLocation_Moved", "Ruler {0} is on the move, now at {1}.");
             serverMessages.Add("RulerLocation_Static", "Ruler {0} is camping out at {1}");
+            serverMessages.Add("UpdateTaxMessage", "The ruler has changed the tax from <color=#ff0000ff>{0}%</color> to <color=#ff0000ff>{1}%</color>");
             lang.RegisterMessages(serverMessages, this);
         }
     }
