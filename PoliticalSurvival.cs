@@ -407,7 +407,6 @@ namespace Oxide.Plugins {
             if (playerToAttack == null) { PrintToChat(player, "player \"{0}\" not found, or ambiguous", args[0]); return; }
 
             if (!CanAffordheliStrike(player)) {
-                Puts("Cant afford");
                 PrintToChat(player, "Ordering a heli strike costs {0} {1}", settings.GetHeliCostQty(), ItemManager.FindItemDefinition(settings.GetHeliCostItem()).displayName.english); return;
             }
 
