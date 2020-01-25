@@ -348,9 +348,12 @@ namespace Oxide.Plugins {
             int netAmount = AddToTaxContainer(item, surveyCharge.name);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
+
         #endregion
 
         int AddToTaxContainer(Item item, string displayName) {
+            if (!IsChestSet()) return -1;
+
             DebugLog("AddToTaxContainer start");
             if (item == null || settings.GetTaxContainerID() == 0) return -1;
             DebugLog("AddToTaxContainer st1");
@@ -381,6 +384,15 @@ namespace Oxide.Plugins {
             DebugLog("OnEntityDeath start");
             BasePlayer player = entity.ToPlayer();
 
+            if (entity != null && entity.ShortPrefabName == "oil_barrel") { //tax oil
+
+                List<DroppedItem> ItemsDropped = new List<DroppedItem>();
+                foreach (DroppedItem ditem in ItemsDropped) {
+                    Item item = ditem?.item;
+                    AddToTaxContainer(item, player.displayName);
+                }
+            }
+
             if (player != null) {
                 if (IsRuler(player.userID)) {
                     BasePlayer killer = null;
@@ -388,7 +400,7 @@ namespace Oxide.Plugins {
                     if (info != null)
                         killer = info.Initiator.ToPlayer();
 
-                    if (killer != null && killer.userID != player.userID && !(player is NPCPlayer)) {
+                    if (killer != null && killer.userID != player.userID && !(killer is NPCPlayer)) {
                         SetRuler(killer);
                         PrintToChat(string.Format(lang.GetMessage("RulerMurdered", this), killer.displayName));
                     } else {
@@ -561,6 +573,10 @@ namespace Oxide.Plugins {
 
         bool IsPlayerOnline(string partialNameOrID) {
             return GetPlayer(partialNameOrID).IsConnected;
+        }
+
+        bool IsChestSet() {
+            return settings.taxContainerID > 0;
         }
 
         BasePlayer GetPlayer(string partialNameOrID) {
