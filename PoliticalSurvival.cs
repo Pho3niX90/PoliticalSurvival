@@ -382,16 +382,21 @@ namespace Oxide.Plugins {
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info) {
             DebugLog("OnEntityDeath start");
+            if (entity == null) return;
             BasePlayer player = entity.ToPlayer();
 
-            if (entity != null && entity.ShortPrefabName == "oil_barrel") { //tax oil
-
-                List<DroppedItem> ItemsDropped = new List<DroppedItem>();
-                foreach (DroppedItem ditem in ItemsDropped) {
-                    Item item = ditem?.item;
-                    AddToTaxContainer(item, player.displayName);
-                }
-            }
+            /* if (entity != null) { //tax oil
+                 if (entity.ShortPrefabName == "oil_barrel") {
+                     List<DroppedItem> ItemsDropped = new List<DroppedItem>();
+                     Vis.Entities<DroppedItem>(entity.transform.position, 1, ItemsDropped);
+                     foreach (DroppedItem ditem in ItemsDropped) {
+                         if (ditem == null) return;
+                         Item item = ditem?.item;
+                         Puts($"Player {player.displayName} - {item.info.displayName} x {item.amount}");
+                         item.amount = AddToTaxContainer(item, player.displayName);
+                     }
+                 }
+             }*/
 
             if (player != null) {
                 if (IsRuler(player.userID)) {
@@ -421,6 +426,7 @@ namespace Oxide.Plugins {
             BasePlayer playerToAttack = GetPlayer(args[0]);
             if (playerToAttack == null) { PrintToChat(player, "player \"{0}\" not found, or ambiguous", args[0]); return; }
 
+            Puts("Can afford heli?");
             if (!CanAffordheliStrike(player)) {
                 PrintToChat(player, "Ordering a heli strike costs {0} {1}", settings.GetHeliCostQty(), ItemManager.FindItemDefinition(settings.GetHeliCostItem()).displayName.english); return;
             }
@@ -430,6 +436,7 @@ namespace Oxide.Plugins {
                 PrintToChat(player, "Insufficient airspace for more than {0} helicopters, please wait for existing patrols to complete", settings.GetMaxHelis()); return;
             }
 
+            Puts("OrderheliStrike");
             OrderheliStrike(playerToAttack);
             PrintToChat(player, "The heli is inbound");
         }
@@ -604,9 +611,11 @@ namespace Oxide.Plugins {
 
         public void OrderheliStrike(BasePlayer playerToAttack) {
             // Deduct the cost
+            if (currentRuler == null) currentRuler = GetPlayer(settings.GetRuler().ToString());
             List<Item> collector = new List<Item>();
             currentRuler.inventory.Take(collector, settings.GetHeliCostItem(), settings.GetHeliCostQty());
 
+            Puts("Spawn it");
             //spawn the birdie
             BaseHelicopter ent = GameManager.server.CreateEntity("assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab", new Vector3(), new Quaternion(), true) as BaseHelicopter;
             if (ent != null && playerToAttack != null) {
