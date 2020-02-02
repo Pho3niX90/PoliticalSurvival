@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.2")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.5.5")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -108,6 +108,9 @@ namespace Oxide.Plugins {
             }
             public double GetRuleLengthInMinutes() {
                 return (new Core.Libraries.Time().GetUnixTimestamp() - rulerSince) / 60.0 / 1000.0;
+            }
+            public double GetRulerOfflineMinutes() {
+                return (new Core.Libraries.Time().GetUnixTimestamp() - _instance.rulerOfflineAt) / 60.0 / 1000.0;
             }
             public Settings SetRulerName(string name) {
                 rulerName = name;
@@ -239,6 +242,7 @@ namespace Oxide.Plugins {
         Dictionary<string, string> serverMessages;
         int worldSize;
         BasePlayer currentRuler;
+        uint rulerOfflineAt = 0;
         private ILocator liveLocator = null;
         private ILocator locator = null;
         private bool Changed = false;
@@ -281,6 +285,10 @@ namespace Oxide.Plugins {
                 Timers.Add("RulerPromote", timer.Repeat(30, 0, () => TryForceRuler()));
             }
             SaveSettings();
+            Puts($"Ruler offline at {rulerOfflineAt}");
+            if (rulerOfflineAt != 0) {
+                ForceNewOfflineRuler(); //TODO get a better way. 
+            }
         }
 
         void Unload() {
@@ -295,10 +303,27 @@ namespace Oxide.Plugins {
 
         void OnPlayerInit(BasePlayer player) {
             if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerConnected", this, player.UserIDString) + " " + settings.GetRealmName());
+            if (currentRuler != null && settings.ruler == currentRuler.userID) {
+                rulerOfflineAt = 0;
+            }
         }
 
         void OnPlayerDisconnected(BasePlayer player, string reason) {
+            Puts("OnPlayerDisconnected 1");
             if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
+            Puts("OnPlayerDisconnected 2");
+            if (settings.ruler != 0 && settings.ruler == currentRuler.userID) {
+                Puts("OnPlayerDisconnected 3");
+                rulerOfflineAt = _time.GetUnixTimestamp();
+                Puts("OnPlayerDisconnected 4");
+                timer.Once(3 * 60 * 60, () => ForceNewOfflineRuler()); //TODO get a better way. 
+            }
+        }
+
+        void ForceNewOfflineRuler() {
+            Puts($"Ruler offline for {settings.GetRulerOfflineMinutes()}");
+            if (rulerOfflineAt != 0 && settings.GetRulerOfflineMinutes() >= (1 * 60)) //TODO make time changeable
+                TryForceNewRuler(true);
         }
 
         #region GatheringHooks
@@ -417,7 +442,26 @@ namespace Oxide.Plugins {
             }
         }
 
+
+        public void TryForceRuler() {
+            if (currentRuler == null && TryForceNewRuler(false))
+                PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
+        }
         #region Commands
+
+        [ChatCommand("fnr")]
+        void TryForceRulerCmd(BasePlayer player, string command, string[] args) {
+            if (!player.IsAdmin) return;
+            if (args.Length == 0) {
+                if (TryForceNewRuler(true))
+                    PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
+            } else if (args.Length == 1) {
+                BasePlayer ruler = BasePlayer.Find(args[0]);
+                SetRuler(ruler);
+                PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
+            }
+        }
+
         [ChatCommand("heli")]
         void HeliCommmand(BasePlayer player, string command, string[] args) {
             if (!IsRuler(player.userID)) { PrintToChat(player, "You aren't the boss"); return; }
@@ -631,6 +675,7 @@ namespace Oxide.Plugins {
         void SetRuler(BasePlayer ruler) {
             Puts("New Ruler! " + ruler.displayName);
             settings.SetRuler(ruler.userID).SetRulerName(ruler.displayName).SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity).SetRealmName(GetMsg("DefaultRealm")).SetRulerSince(_time.GetUnixTimestamp());
+            currentRuler = ruler;
 
             if (settings.GetBroadcastRuler()) {
                 timers["AdviseRulerPosition"].Destroy();
@@ -766,16 +811,10 @@ namespace Oxide.Plugins {
             // PrintToChat(Text.Broadcast_HelpAdvice);
         }
 
-        public void TryForceRuler() {
-            if (currentRuler == null && TryForceNewRuler())
-                PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
-        }
-
-        public bool TryForceNewRuler() {
-            if (currentRuler != null) return false;
+        public bool TryForceNewRuler(bool force) {
+            if (currentRuler != null && !force) return false;
 
             SetRuler(BasePlayer.activePlayerList.GetRandom());
-
             return true;
         }
 
