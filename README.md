@@ -1,4 +1,4 @@
-# PoliticalSurvival
+# Political Survival
 Become the ruler of the server, tax all players, and call in helis for support.
 
 # Commands
