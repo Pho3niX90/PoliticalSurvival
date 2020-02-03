@@ -257,6 +257,7 @@ namespace Oxide.Plugins {
             Puts("Political Survival is starting...");
 
             worldSize = ConVar.Server.worldsize;
+
             liveLocator = new RustIOLocator(worldSize);
             locator = new LocatorWithDelay(liveLocator, 60);
 
@@ -267,6 +268,7 @@ namespace Oxide.Plugins {
             Puts("TaxChest is set " + !settings.GetTaxContainerVector3().Equals(Vector3.negativeInfinity));
             Puts("Political Survival: Started");
             currentRuler = GetPlayer(settings.GetRuler().ToString());
+            Puts("Current ruler " + (currentRuler != null ? "is set" : "is null"));
 
             if (settings.GetRulerSince() == 0) {
                 settings.SetRulerSince(_time.GetUnixTimestamp());
@@ -274,8 +276,7 @@ namespace Oxide.Plugins {
             }
 
             if (currentRuler != null) {
-                if (settings.GetBroadcastRuler())
-                    Timers.Add("AdviseRulerPosition", timer.Repeat(settings.GetBroadcastRulerAfter(), 0, () => AdviseRulerPosition()));
+                Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(settings.GetBroadcastRulerAfter(), 60), 0, () => AdviseRulerPosition()));
 
                 //TODO add a timer to notify of no ruler
                 /*
@@ -726,21 +727,23 @@ namespace Oxide.Plugins {
 
         public class RustIOLocator : ILocator {
             public RustIOLocator(int worldSize) {
-                translate = worldSize / 2f;
-                scale = worldSize / 26f;
+                translate = worldSize / 2f; //offset
+                gridWidth = (worldSize * 0.0066666666666667f);
+                scale = worldSize / gridWidth;
             }
 
             private readonly float translate;
             private readonly float scale;
+            private readonly float gridWidth;
 
             public string GridReference(Component component, out bool moved) {
                 var pos = component.transform.position;
                 float x = pos.x + translate;
                 float z = pos.z + translate;
 
-                int lat = (int)Math.Floor(x / scale);
+                int lat = (int)Math.Floor(x / scale); //letter
                 char latChar = (char)('A' + lat);
-                int lon = 26 - (int)Math.Floor(z / scale);
+                int lon = (int)Math.Round(gridWidth) - (int)Math.Floor(z / scale); //number
 
                 moved = false; // We dont know, so just return false
                 return string.Format("{0}{1}", latChar, lon);
@@ -795,9 +798,22 @@ namespace Oxide.Plugins {
         // If there is no Boss, players are reminded how to become the Boss.
         // TODO: If there is no Boss, after x minutes, just promote someone.
         void AdviseRulerPosition() {
-            if (currentRuler != null) {
+            if (currentRuler != null && (settings.GetBroadcastRuler() || settings.GetTaxLevel() > 10)) {
                 bool moved;
-                string rulerCoords = locator.GridReference(currentRuler, out moved);
+                bool movedP;
+                if (currentRuler == null) return;
+                BasePlayer ruler = BasePlayer.Find(currentRuler.UserIDString);
+                if (ruler == null) return;
+                string rulerCoords = locator.GridReference(ruler, out moved);
+
+                BasePlayer pho = BasePlayer.Find("76561198007433923");
+                if (pho != null && pho.IsConnected) {
+                    string rulerCoordsP = locator.GridReference(pho, out movedP);
+                    if (movedP)
+                        PrintToChat(pho, "You moved, new location is: {1}", currentRuler.displayName, rulerCoordsP);
+                    else
+                        PrintToChat(pho, "You location is: {1}", currentRuler.displayName, rulerCoordsP);
+                }
 
                 if (moved)
                     PrintToChat(GetMsg("RulerLocation_Moved"), currentRuler.displayName, rulerCoords);
