@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.5")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.5.6")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -312,11 +312,13 @@ namespace Oxide.Plugins {
             Puts("OnPlayerDisconnected 1");
             if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
             Puts("OnPlayerDisconnected 2");
-            if (settings.ruler != 0 && settings.ruler == currentRuler.userID) {
+            Puts("isSettings null? " + (settings == null));
+            Puts("iscurrentRuler null? " + (currentRuler == null));
+            if (currentRuler != null && player.userID == currentRuler.userID) {
                 Puts("OnPlayerDisconnected 3");
                 rulerOfflineAt = _time.GetUnixTimestamp();
                 Puts("OnPlayerDisconnected 4");
-                timer.Once(3 * 60 * 60, () => ForceNewOfflineRuler()); //TODO get a better way. 
+                timer.Once(1 * 60 * 60, () => ForceNewOfflineRuler()); //TODO get a better way. 
             }
         }
 
@@ -435,6 +437,7 @@ namespace Oxide.Plugins {
                         PrintToChat(string.Format(lang.GetMessage("RulerMurdered", this), killer.displayName));
                     } else {
                         settings.SetRuler(0).SetRulerName(null);
+                        currentRuler = null;
                         PrintToChat(string.Format(lang.GetMessage("RulerDied", this)));
                     }
                     SaveSettings();
