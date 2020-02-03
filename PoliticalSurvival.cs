@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.7")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.5.8")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -33,6 +33,7 @@ namespace Oxide.Plugins {
 
             public bool broadcastRulerPosition;
             public int broadcastRulerPositionAfter;
+            public int broadcastRulerPositionAfterPercentage;
 
             public Settings(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm, int taxMi, int taxMx) {
                 taxContainerVector3 = tcv4;
@@ -62,6 +63,10 @@ namespace Oxide.Plugins {
 
             public int GetBroadcastRulerAfter() {
                 return broadcastRulerPositionAfter;
+            }
+
+            public int GetBroadcastRulerAfterPercentage() {
+                return broadcastRulerPositionAfterPercentage;
             }
 
             public int GetMaxHelis() {
@@ -384,7 +389,7 @@ namespace Oxide.Plugins {
 
             DebugLog("AddToTaxContainer start");
             if (item == null || settings.GetTaxContainerID() == 0 || settings.GetRuler() == 0 || settings.GetTaxLevel() == 0 || settings.GetTaxContainerVector3() == Vector3.negativeInfinity) return -1;
-            
+
             ItemDefinition ToAdd = ItemManager.FindItemDefinition(item.info.itemid);
             int Tax = Convert.ToInt32(Math.Ceiling((item.amount * settings.GetTaxLevel()) / 100));
 
@@ -787,7 +792,7 @@ namespace Oxide.Plugins {
         // If there is no Boss, players are reminded how to become the Boss.
         // TODO: If there is no Boss, after x minutes, just promote someone.
         void AdviseRulerPosition() {
-            if (currentRuler != null && (settings.GetBroadcastRuler() || settings.GetTaxLevel() > 10)) {
+            if (currentRuler != null && (settings.GetBroadcastRuler() || (settings.GetBroadcastRulerAfterPercentage() > 0 && settings.GetTaxLevel() > settings.GetBroadcastRulerAfterPercentage()))) {
                 bool moved;
                 bool movedP;
                 if (currentRuler == null) return;
@@ -795,13 +800,15 @@ namespace Oxide.Plugins {
                 if (ruler == null) return;
                 string rulerCoords = locator.GridReference(ruler, out moved);
 
-                BasePlayer pho = BasePlayer.Find("76561198007433923");
-                if (pho != null && pho.IsConnected) {
-                    string rulerCoordsP = locator.GridReference(pho, out movedP);
-                    if (movedP)
-                        PrintToChat(pho, "You moved, new location is: {1}", currentRuler.displayName, rulerCoordsP);
-                    else
-                        PrintToChat(pho, "You location is: {1}", currentRuler.displayName, rulerCoordsP);
+                if (DebugMode) {
+                    BasePlayer pho = BasePlayer.Find("76561198007433923"); //this is only for development purposes, and testing the grid system. 
+                    if (pho != null && pho.IsConnected) {
+                        string rulerCoordsP = locator.GridReference(pho, out movedP);
+                        if (movedP)
+                            PrintToChat(pho, "You moved, new location is: {1}", currentRuler.displayName, rulerCoordsP);
+                        else
+                            PrintToChat(pho, "You location is: {1}", currentRuler.displayName, rulerCoordsP);
+                    }
                 }
 
                 if (moved)
