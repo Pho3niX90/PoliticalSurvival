@@ -309,15 +309,15 @@ namespace Oxide.Plugins {
         }
 
         void OnPlayerDisconnected(BasePlayer player, string reason) {
-            Puts("OnPlayerDisconnected 1");
+            // Puts("OnPlayerDisconnected 1");
             if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
-            Puts("OnPlayerDisconnected 2");
-            Puts("isSettings null? " + (settings == null));
-            Puts("iscurrentRuler null? " + (currentRuler == null));
+            // Puts("OnPlayerDisconnected 2");
+            // Puts("isSettings null? " + (settings == null));
+            // Puts("iscurrentRuler null? " + (currentRuler == null));
             if (currentRuler != null && player.userID == currentRuler.userID) {
-                Puts("OnPlayerDisconnected 3");
+                // Puts("OnPlayerDisconnected 3");
                 rulerOfflineAt = _time.GetUnixTimestamp();
-                Puts("OnPlayerDisconnected 4");
+                // Puts("OnPlayerDisconnected 4");
                 timer.Once(1 * 60 * 60, () => ForceNewOfflineRuler()); //TODO get a better way. 
             }
         }
