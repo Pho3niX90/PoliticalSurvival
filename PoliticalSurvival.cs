@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.6")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.5.7")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -460,6 +460,7 @@ namespace Oxide.Plugins {
                     PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
             } else if (args.Length == 1) {
                 BasePlayer ruler = BasePlayer.Find(args[0]);
+                if (ruler == null) { PrintToChat(lang.GetMessage("PlayerNotFound", this), args[0]); return; }
                 SetRuler(ruler);
                 PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
             }
@@ -471,7 +472,7 @@ namespace Oxide.Plugins {
             if (args.Length != 1) { PrintToChat(player, "Usage '/heli player' where player can also be partial name"); return; }
 
             BasePlayer playerToAttack = GetPlayer(args[0]);
-            if (playerToAttack == null) { PrintToChat(player, "player \"{0}\" not found, or ambiguous", args[0]); return; }
+            if (playerToAttack == null) { PrintToChat(player, lang.GetMessage("PlayerNotFound", this), args[0]); return; }
 
             Puts("Can afford heli?");
             if (!CanAffordheliStrike(player)) {
@@ -878,6 +879,8 @@ namespace Oxide.Plugins {
             serverMessages.Add("RulerLocation_Moved", "Ruler {0} is on the move, now at {1}.");
             serverMessages.Add("RulerLocation_Static", "Ruler {0} is camping out at {1}");
             serverMessages.Add("UpdateTaxMessage", "The ruler has changed the tax from <color=#ff0000ff>{0}%</color> to <color=#ff0000ff>{1}%</color>");
+            serverMessages.Add("PlayerNotFound", "player \"{0}\" not found, or ambiguous");
+
             lang.RegisterMessages(serverMessages, this);
         }
     }
