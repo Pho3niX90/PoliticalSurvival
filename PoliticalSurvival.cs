@@ -1,12 +1,13 @@
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.8")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.5.9")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -288,7 +289,7 @@ namespace Oxide.Plugins {
                 if (GameConfig.IsHelpNotiferEnabled)
                     Timers.Add("HelpNotifier", timer.Repeat(GameConfig.HelpNotifierInverval, 0, () => AdviseRules()));
                 */
-                Timers.Add("RulerPromote", timer.Repeat(30, 0, () => TryForceRuler()));
+                Timers.Add("RulerPromote", timer.Repeat(60, 0, () => TryForceRuler()));
             }
             SaveSettings();
             Puts($"Ruler offline at {rulerOfflineAt}");
@@ -613,7 +614,7 @@ namespace Oxide.Plugins {
             List<string> players = new List<string>();
 
             foreach (BasePlayer pl in BasePlayer.activePlayerList) {
-                players.Add(pl.displayName);
+                players.Add("<color=#ff0000ff>" + pl.displayName + "</color>");
             }
             builder.Append(String.Join(", ", players));
 
@@ -787,34 +788,56 @@ namespace Oxide.Plugins {
         #endregion
         #region Timers and Events
 
-        // AdviceBossPosition is called every n seconds, and updates all played on the current
-        // location of the Boss.This is intended to be a negative aspect of being the Boss.
-        // If there is no Boss, players are reminded how to become the Boss.
-        // TODO: If there is no Boss, after x minutes, just promote someone.
+
+        private MonumentInfo FindMonument(Vector3 pos) {
+            MonumentInfo monumentClosest;
+
+            foreach (var monument in TerrainMeta.Path.Monuments) {
+                if (monument.name.Contains("oil", CompareOptions.IgnoreCase) || monument.name.Contains("cargo", CompareOptions.IgnoreCase)) {
+                    float dist = Vector3.Distance(monument.transform.position, pos);
+                    if (dist <= 80) {
+                        monumentClosest = monument;
+                        return monumentClosest;
+                    }
+                } else {
+                    continue;
+                }
+            }
+            return null;
+        }
+
         void AdviseRulerPosition() {
+            Puts("AdviseRulerPosition");
             if (currentRuler != null && (settings.GetBroadcastRuler() || (settings.GetBroadcastRulerAfterPercentage() > 0 && settings.GetTaxLevel() > settings.GetBroadcastRulerAfterPercentage()))) {
                 bool moved;
-                bool movedP;
                 if (currentRuler == null) return;
                 BasePlayer ruler = BasePlayer.Find(currentRuler.UserIDString);
                 if (ruler == null) return;
-                string rulerCoords = locator.GridReference(ruler, out moved);
-
+                string rulerMonument = FindMonument(ruler.transform.position)?.displayPhrase.english;
+                string rulerGrid = locator.GridReference(ruler, out moved);
+                string rulerCoords = rulerMonument != null && rulerMonument.Length > 0 ? rulerMonument : rulerGrid;
+                /*
+                bool movedP;
                 if (DebugMode) {
                     BasePlayer pho = BasePlayer.Find("76561198007433923"); //this is only for development purposes, and testing the grid system. 
                     if (pho != null && pho.IsConnected) {
-                        string rulerCoordsP = locator.GridReference(pho, out movedP);
+                        Puts("AdviseRulerPosition Pho3niX90");
+                        string monument = FindMonument(pho.transform.position)?.displayPhrase.english;
+                        string grid = locator.GridReference(pho, out movedP);
+                        string rulerCoordsP = monument != null && monument.Length > 0 ? monument : grid;
                         if (movedP)
                             PrintToChat(pho, "You moved, new location is: {1}", currentRuler.displayName, rulerCoordsP);
                         else
                             PrintToChat(pho, "You location is: {1}", currentRuler.displayName, rulerCoordsP);
                     }
                 }
+                */
 
                 if (moved)
                     PrintToChat(GetMsg("RulerLocation_Moved"), currentRuler.displayName, rulerCoords);
                 else
                     PrintToChat(GetMsg("RulerLocation_Static"), currentRuler.displayName, rulerCoords);
+
                 /*} else
                     PrintToChat(Text.Broadcast_ClaimAvailable);
            }*/
@@ -888,8 +911,8 @@ namespace Oxide.Plugins {
             serverMessages.Add("InfoRealmName", "Realm Name");
             serverMessages.Add("InfoTaxLevel", "Tax level");
             serverMessages.Add("InfoTaxCmd", "Use <color=#008080ff>/settax {0}-{1}</color> to set tax level");
-            serverMessages.Add("RulerLocation_Moved", "Ruler {0} is on the move, now at {1}.");
-            serverMessages.Add("RulerLocation_Static", "Ruler {0} is camping out at {1}");
+            serverMessages.Add("RulerLocation_Moved", "Ruler <color=#ff0000ff>{0}</color> is on the move, now at <color=#ff0000ff>{1}</color>.");
+            serverMessages.Add("RulerLocation_Static", "Ruler <color=#ff0000ff>{0}</color> is camping out at <color=#ff0000ff>{1}</color>");
             serverMessages.Add("UpdateTaxMessage", "The ruler has changed the tax from <color=#ff0000ff>{0}%</color> to <color=#ff0000ff>{1}%</color>");
             serverMessages.Add("PlayerNotFound", "player \"{0}\" not found, or ambiguous");
 
