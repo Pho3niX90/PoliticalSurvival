@@ -383,19 +383,8 @@ namespace Oxide.Plugins {
             if (!IsChestSet()) return -1;
 
             DebugLog("AddToTaxContainer start");
-            if (item == null || settings.GetTaxContainerID() == 0) return -1;
-            DebugLog("AddToTaxContainer st1");
-            if (settings.GetTaxLevel() == 0 || settings.GetRuler() == 0) return -1;
-            DebugLog("AddToTaxContainer st2");
-            if ((settings.GetTaxContainerID() != 0 && FindStorageContainer(settings.GetTaxContainerID()) == null)
-                || settings.GetTaxContainerVector3() == Vector3.negativeInfinity) {
-                DebugLog("AddToTaxContainer st3");
-                settings.SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity);
-                DebugLog("AddToTaxContainer st4");
-                Puts("There were no tax container set");
-                return -1;
-            }
-
+            if (item == null || settings.GetTaxContainerID() == 0 || settings.GetRuler() == 0 || settings.GetTaxLevel() == 0 || settings.GetTaxContainerVector3() == Vector3.negativeInfinity) return -1;
+            
             ItemDefinition ToAdd = ItemManager.FindItemDefinition(item.info.itemid);
             int Tax = Convert.ToInt32(Math.Ceiling((item.amount * settings.GetTaxLevel()) / 100));
 
