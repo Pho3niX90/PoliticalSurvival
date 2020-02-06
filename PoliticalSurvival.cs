@@ -7,26 +7,19 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.5.9")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.0")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
         Settings settings;
+        PSConfig config;
         private Core.Libraries.Time _time = GetLibrary<Core.Libraries.Time>();
         static PoliticalSurvival _instance;
 
         #region Settings Class
-        public class Settings {
-            public bool showWelcomeMsg = false;
-            public Vector3 taxContainerVector3;
-            public uint taxContainerID;
-            public double tax;
-            public ulong ruler;
-            public string rulerName;
-            public uint rulerSince;
-            public string realm;
-            public int taxMin;
-            public int taxMax;
+        private class PSConfig {
+            public string Version;
+            public bool showWelcomeMsg;
             public int maxHelis;
 
             public int heliItemCost;
@@ -36,15 +29,26 @@ namespace Oxide.Plugins {
             public int broadcastRulerPositionAfter;
             public int broadcastRulerPositionAfterPercentage;
 
-            public Settings(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm, int taxMi, int taxMx) {
+            public int taxMin;
+            public int taxMax;
+        }
+
+        public class Settings {
+            public Vector3 taxContainerVector3;
+            public uint taxContainerID;
+            public double tax;
+            public ulong ruler;
+            public string rulerName;
+            public uint rulerSince;
+            public string realm;
+
+            public Settings(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm) {
                 taxContainerVector3 = tcv4;
                 taxContainerID = txId;
                 tax = tx;
                 ruler = rlr;
                 rulerName = rlrname;
                 realm = rlm;
-                taxMin = taxMi;
-                taxMax = taxMx;
             }
 
             public Settings() { }
@@ -56,30 +60,6 @@ namespace Oxide.Plugins {
 
             public long GetRulerSince() {
                 return rulerSince;
-            }
-
-            public bool GetBroadcastRuler() {
-                return broadcastRulerPosition;
-            }
-
-            public int GetBroadcastRulerAfter() {
-                return broadcastRulerPositionAfter;
-            }
-
-            public int GetBroadcastRulerAfterPercentage() {
-                return broadcastRulerPositionAfterPercentage;
-            }
-
-            public int GetMaxHelis() {
-                return maxHelis;
-            }
-
-            public int GetHeliCostItem() {
-                return (heliItemCost != 0 ? heliItemCost : 317398316);
-            }
-
-            public int GetHeliCostQty() {
-                return (heliItemCostQty == 0) ? 1000 : heliItemCostQty;
             }
 
             public Settings SetTaxContainerVector3(Vector3 vec) {
@@ -131,12 +111,6 @@ namespace Oxide.Plugins {
             }
             public string GetRealmName() {
                 return realm;
-            }
-            public int GetTaxMin() {
-                return taxMin;
-            }
-            public int GetTaxMax() {
-                return taxMax == 0 ? 95 : taxMax;
             }
         }
         #endregion
@@ -260,6 +234,7 @@ namespace Oxide.Plugins {
             _instance = this;
             LoadServerMessages();
             LoadSettings();
+            config = Config.ReadObject<PSConfig>();
             Puts("Political Survival is starting...");
 
             worldSize = ConVar.Server.worldsize;
@@ -282,7 +257,7 @@ namespace Oxide.Plugins {
             }
 
             if (currentRuler != null) {
-                Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(settings.GetBroadcastRulerAfter(), 60), 0, () => AdviseRulerPosition()));
+                Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
 
                 //TODO add a timer to notify of no ruler
                 /*
@@ -309,7 +284,7 @@ namespace Oxide.Plugins {
         }
 
         void OnPlayerInit(BasePlayer player) {
-            if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerConnected", this, player.UserIDString) + " " + settings.GetRealmName());
+            if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerConnected", this, player.UserIDString) + " " + settings.GetRealmName());
             if (currentRuler != null && settings.ruler == currentRuler.userID) {
                 rulerOfflineAt = 0;
             }
@@ -317,7 +292,7 @@ namespace Oxide.Plugins {
 
         void OnPlayerDisconnected(BasePlayer player, string reason) {
             // Puts("OnPlayerDisconnected 1");
-            if (settings.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
+            if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
             // Puts("OnPlayerDisconnected 2");
             // Puts("isSettings null? " + (settings == null));
             // Puts("iscurrentRuler null? " + (currentRuler == null));
@@ -472,12 +447,12 @@ namespace Oxide.Plugins {
 
             Puts("Can afford heli?");
             if (!CanAffordheliStrike(player)) {
-                PrintToChat(player, "Ordering a heli strike costs {0} {1}", settings.GetHeliCostQty(), ItemManager.FindItemDefinition(settings.GetHeliCostItem()).displayName.english); return;
+                PrintToChat(player, "Ordering a heli strike costs {0} {1}", config.heliItemCostQty, ItemManager.FindItemDefinition(config.heliItemCost).displayName.english); return;
             }
 
             int heliCount = UnityEngine.Object.FindObjectsOfType<BaseHelicopter>().Count();
-            if (heliCount >= settings.GetMaxHelis()) {
-                PrintToChat(player, "Insufficient airspace for more than {0} helicopters, please wait for existing patrols to complete", settings.GetMaxHelis()); return;
+            if (heliCount >= config.maxHelis) {
+                PrintToChat(player, "Insufficient airspace for more than {0} helicopters, please wait for existing patrols to complete", config.maxHelis); return;
             }
 
             Puts("OrderheliStrike");
@@ -488,8 +463,9 @@ namespace Oxide.Plugins {
         [ChatCommand("taxrange")]
         void AdmSetTaxChestCommand(BasePlayer player, string command, string[] arguments) {
             if (player.IsAdmin && arguments.Length == 2) {
-                int.TryParse(arguments[0], out settings.taxMin);
-                int.TryParse(arguments[1], out settings.taxMax);
+                int.TryParse(arguments[0], out config.taxMin);
+                int.TryParse(arguments[1], out config.taxMax);
+                SaveConfig();
             }
         }
 
@@ -559,7 +535,7 @@ namespace Oxide.Plugins {
             SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoTaxLevel", this, player.UserIDString) + ": </color>" + settings.GetTaxLevel() + "%");
             if (IsRuler(player.userID)) {
                 SendReply(player, lang.GetMessage("SettingNewTaxChest", this, player.UserIDString));
-                SendReply(player, string.Format(lang.GetMessage("InfoTaxCmd", this, player.UserIDString), settings.GetTaxMin(), settings.GetTaxMax()) + ": " + settings.GetTaxLevel() + "%");
+                SendReply(player, string.Format(lang.GetMessage("InfoTaxCmd", this, player.UserIDString), config.taxMin, config.taxMax) + ": " + settings.GetTaxLevel() + "%");
             }
         }
 
@@ -581,10 +557,10 @@ namespace Oxide.Plugins {
                     if (newTaxLevel == settings.GetTaxLevel())
                         return;
 
-                    if (newTaxLevel > settings.GetTaxMax())
-                        newTaxLevel = settings.GetTaxMax();
-                    else if (newTaxLevel < settings.GetTaxMin())
-                        newTaxLevel = settings.GetTaxMin();
+                    if (newTaxLevel > config.taxMax)
+                        newTaxLevel = config.taxMax;
+                    else if (newTaxLevel < config.taxMin)
+                        newTaxLevel = config.taxMin;
 
                     SetTaxLevel(newTaxLevel);
                     PrintToChat(string.Format(lang.GetMessage("UpdateTaxMessage", this), oldTax, newTaxLevel));
@@ -650,14 +626,14 @@ namespace Oxide.Plugins {
         }
 
         public bool CanAffordheliStrike(BasePlayer player) {
-            return player.inventory.GetAmount(settings.GetHeliCostItem()) >= settings.GetHeliCostQty();
+            return player.inventory.GetAmount(config.heliItemCost) >= config.heliItemCostQty;
         }
 
         public void OrderheliStrike(BasePlayer playerToAttack) {
             // Deduct the cost
             if (currentRuler == null) currentRuler = GetPlayer(settings.GetRuler().ToString());
             List<Item> collector = new List<Item>();
-            currentRuler.inventory.Take(collector, settings.GetHeliCostItem(), settings.GetHeliCostQty());
+            currentRuler.inventory.Take(collector, config.heliItemCost, config.heliItemCostQty);
 
             Puts("Spawn it");
             //spawn the birdie
@@ -677,10 +653,10 @@ namespace Oxide.Plugins {
             settings.SetRuler(ruler.userID).SetRulerName(ruler.displayName).SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity).SetRealmName(GetMsg("DefaultRealm")).SetRulerSince(_time.GetUnixTimestamp());
             currentRuler = ruler;
 
-            if (settings.GetBroadcastRuler()) {
+            if (config.broadcastRulerPosition || config.broadcastRulerPositionAfterPercentage > 0) {
                 timers["AdviseRulerPosition"].Destroy();
                 timers.Remove("AdviseRulerPosition");
-                Timers.Add("AdviseRulerPosition", timer.Repeat(settings.GetBroadcastRulerAfter(), 0, () => AdviseRulerPosition()));
+                Timers.Add("AdviseRulerPosition", timer.Repeat(config.broadcastRulerPositionAfter, 0, () => AdviseRulerPosition()));
             }
 
             SaveSettings();
@@ -808,7 +784,7 @@ namespace Oxide.Plugins {
 
         void AdviseRulerPosition() {
             Puts("AdviseRulerPosition");
-            if (currentRuler != null && (settings.GetBroadcastRuler() || (settings.GetBroadcastRulerAfterPercentage() > 0 && settings.GetTaxLevel() > settings.GetBroadcastRulerAfterPercentage()))) {
+            if (currentRuler != null && (config.broadcastRulerPosition || (config.broadcastRulerPositionAfterPercentage > 0 && settings.GetTaxLevel() > config.broadcastRulerPositionAfterPercentage))) {
                 bool moved;
                 if (currentRuler == null) return;
                 BasePlayer ruler = BasePlayer.Find(currentRuler.UserIDString);
@@ -859,13 +835,7 @@ namespace Oxide.Plugins {
 
         #endregion
         void SaveSettings() {
-            if (settings.heliItemCost == 0) {
-                settings.heliItemCost = settings.GetHeliCostItem();
-            }
-            if (settings.heliItemCostQty == 0) {
-                settings.heliItemCostQty = settings.GetHeliCostQty();
-            }
-            Interface.Oxide.DataFileSystem.WriteObject<Settings>("PoliticalSurvivalSettings", settings, true);
+            Interface.Oxide.DataFileSystem.WriteObject<Settings>("PoliticalSurvival", settings, true);
         }
 
         void LoadSettings() {
@@ -884,9 +854,32 @@ namespace Oxide.Plugins {
             }
         }
 
+        T GetConfig<T>(string name, T defaultValue) => Config[name] == null ? defaultValue : (T)Convert.ChangeType(Config[name], typeof(T));
+        protected override void LoadDefaultConfig() {
+            Puts("Creating a new configuration file");
+            Config.WriteObject(UpgradeConfig(), true);
+            SaveConfig();
+        }
+
+        PSConfig UpgradeConfig(string oldVersion = "", string newVersion = "") {
+            return new PSConfig {
+                Version = "0.0.1",
+                showWelcomeMsg = false,
+                maxHelis = 2,
+
+                heliItemCost = 13994,
+                heliItemCostQty = 500,
+
+                broadcastRulerPosition = false,
+                broadcastRulerPositionAfter = 500,
+                broadcastRulerPositionAfterPercentage = 10
+            };
+        }
+
         void DebugLog(string msg) {
             if (DebugMode) Puts(msg);
         }
+
         string GetMsg(string msg) => lang.GetMessage(msg, this);
         void LoadServerMessages() {
             serverMessages = new Dictionary<string, string>();
