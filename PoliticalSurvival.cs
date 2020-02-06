@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.0")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.1")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -828,8 +828,8 @@ namespace Oxide.Plugins {
 
         public bool TryForceNewRuler(bool force) {
             if (currentRuler != null && !force) return false;
-
-            SetRuler(BasePlayer.activePlayerList.GetRandom());
+            int index = UnityEngine.Random.Range(0,BasePlayer.activePlayerList.Count);
+            SetRuler(BasePlayer.activePlayerList[index]);
             return true;
         }
 
