@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.1")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.2")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -465,6 +465,7 @@ namespace Oxide.Plugins {
             if (player.IsAdmin && arguments.Length == 2) {
                 int.TryParse(arguments[0], out config.taxMin);
                 int.TryParse(arguments[1], out config.taxMax);
+                PrintToChat(player, $"Tax range set to {config.taxMin} - {config.taxMax}");
                 SaveConfig();
             }
         }
@@ -828,7 +829,7 @@ namespace Oxide.Plugins {
 
         public bool TryForceNewRuler(bool force) {
             if (currentRuler != null && !force) return false;
-            int index = UnityEngine.Random.Range(0,BasePlayer.activePlayerList.Count);
+            int index = UnityEngine.Random.Range(0, BasePlayer.activePlayerList.Count);
             SetRuler(BasePlayer.activePlayerList[index]);
             return true;
         }
@@ -872,7 +873,11 @@ namespace Oxide.Plugins {
 
                 broadcastRulerPosition = false,
                 broadcastRulerPositionAfter = 500,
-                broadcastRulerPositionAfterPercentage = 10
+                broadcastRulerPositionAfterPercentage = 10,
+
+
+                taxMin = 0,
+                taxMax = 35
             };
         }
 
