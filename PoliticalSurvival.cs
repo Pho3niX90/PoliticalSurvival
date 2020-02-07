@@ -461,11 +461,15 @@ namespace Oxide.Plugins {
         }
 
         [ChatCommand("taxrange")]
-        void AdmSetTaxChestCommand(BasePlayer player, string command, string[] arguments) {
-            if (player.IsAdmin && arguments.Length == 2) {
-                int.TryParse(arguments[0], out config.taxMin);
-                int.TryParse(arguments[1], out config.taxMax);
-                PrintToChat(player, $"Tax range set to {config.taxMin} - {config.taxMax}");
+        void AdmSetTaxChestCommand(BasePlayer player, string command, string[] args) {
+            if (player.IsAdmin && args.Length == 2) {
+                int taxMin = 0;
+                int taxMax = 10;
+                int.TryParse(args[0], out taxMin);
+                int.TryParse(args[1], out taxMax);
+                config.taxMin = taxMin;
+                config.taxMax = taxMax;
+                PrintToChat(player, $"Tax range set to Min:{config.taxMin}% - Max:{config.taxMax}%");
                 SaveConfig();
             }
         }
@@ -542,22 +546,22 @@ namespace Oxide.Plugins {
 
         [ChatCommand("claimruler")]
         void ClaimRuler(BasePlayer player, string command, string[] arguments) {
-            if (settings.GetRuler() < 1) {
+            if (currentRuler == null) {
                 PrintToChat("<color=#008080ff><b>" + player.displayName + "</b></color> " + lang.GetMessage("IsNowRuler", this));
                 SetRuler(player);
             }
         }
 
         [ChatCommand("settax")]
-        void SetTaxCommand(BasePlayer player, string command, string[] arguments) {
+        void SetTaxCommand(BasePlayer player, string command, string[] args) {
             if (IsRuler(player.userID)) {
                 double newTaxLevel = 0.0;
-                if (double.TryParse(MergeParams(0, arguments), out newTaxLevel)) {
+                if (double.TryParse(args[0], out newTaxLevel)) {
                     double oldTax = settings.GetTaxLevel();
-                    Puts("Tax have been changed by " + player.displayName + " from " + settings.GetTaxLevel() + " to " + newTaxLevel);
                     if (newTaxLevel == settings.GetTaxLevel())
                         return;
-
+                    Puts("Tax have been changed by " + player.displayName + " from " + settings.GetTaxLevel() + " to " + newTaxLevel);
+                    Puts($"Tax {config.taxMin} {config.taxMax}");
                     if (newTaxLevel > config.taxMax)
                         newTaxLevel = config.taxMax;
                     else if (newTaxLevel < config.taxMin)
@@ -840,8 +844,8 @@ namespace Oxide.Plugins {
         }
 
         void LoadSettings() {
-            if (Interface.Oxide.DataFileSystem.ExistsDatafile("PoliticalSurvivalSettings")) {
-                settings = Interface.Oxide.DataFileSystem.ReadObject<Settings>("PoliticalSurvivalSettings");
+            if (Interface.Oxide.DataFileSystem.ExistsDatafile("PoliticalSurvival")) {
+                settings = Interface.Oxide.DataFileSystem.ReadObject<Settings>("PoliticalSurvival");
                 Puts("Settings loaded");
             } else {
                 Puts("Settings doesn't exist, creating default");
