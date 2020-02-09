@@ -17,13 +17,24 @@ Become the ruler of the server, tax all players, and call in helis for support.
 ### Default
 ```json
 {
-  "broadcastRulerPosition": false, //Shold the rulers position be broadcasted? 
-  "broadcastRulerPositionAfter": 500, //After how many seconds should it be broadcasted?
-  "broadcastRulerPositionAfterPercentage": 10, //Broadcast ruler position after which tax percentage
+  "Version": "0.0.2", //please do not change this.
+  "showWelcomeMsg": false,
+  "maxHelis": 2, // maximum helis allowed in the map at once. 
   "heliItemCost": 13994, //The itemID of the item to charge, default is high quality metal
   "heliItemCostQty": 500, // How many should be charged of the item
-  "maxHelis": 2, // maximum helis allowed in the map at once. 
-  "showWelcomeMsg": false,
-  "Version": "0.0.1" //please do not change this.
+  "broadcastRulerPosition": false, //Shold the rulers position be broadcasted? 
+  "broadcastRulerPositionAfter": 60, //After how many seconds should it be broadcasted?
+  "broadcastRulerPositionAfterPercentage": 10, //Broadcast ruler position after which tax percentage
+  "taxMin": 0,
+  "taxMax": 35,
+  "taxSource": { // the below sets if the specific source should be taxed
+    "DispenserGather": true,
+    "CropGather": true,
+    "DispenserBonus": true,
+    "QuarryGather": true,
+    "ExcavatorGather": true,
+    "CollectiblePickup": true,
+    "SurveyGather": true
+  }
 }
 ```

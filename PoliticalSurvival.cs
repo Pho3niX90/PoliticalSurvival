@@ -415,9 +415,9 @@ namespace Oxide.Plugins {
         }
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info) {
-            DebugLog("OnEntityDeath start");
+            Puts("OnEntityDeath start");
             if (entity == null) return;
-            BasePlayer player = entity.ToPlayer();
+            BasePlayer player = entity as BasePlayer;
 
             /* if (entity != null) { //tax oil
                  if (entity.ShortPrefabName == "oil_barrel") {
@@ -431,13 +431,12 @@ namespace Oxide.Plugins {
                      }
                  }
              }*/
-
             if (player != null) {
                 if (IsRuler(player.userID)) {
                     BasePlayer killer = null;
                     Puts("Pol test 1");
                     if (info != null)
-                        killer = info.Initiator.ToPlayer();
+                        killer = info.Initiator as BasePlayer;
                     Puts("Pol test 2");
 
                     if (killer != null && killer.userID != player.userID && !(killer is NPCPlayer)) {
@@ -459,7 +458,6 @@ namespace Oxide.Plugins {
             }
         }
 
-
         public void TryForceRuler() {
             if (currentRuler == null && TryForceNewRuler(false))
                 PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
@@ -468,12 +466,18 @@ namespace Oxide.Plugins {
 
         [ChatCommand("fnr")]
         void TryForceRulerCmd(BasePlayer player, string command, string[] args) {
-            if (!player.IsAdmin) return;
+            if (!player.IsAdmin || !IsRuler(player.userID)) return;
             if (args.Length == 0) {
                 if (TryForceNewRuler(true))
                     PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
             } else if (args.Length == 1) {
-                BasePlayer ruler = BasePlayer.Find(args[0]);
+                BasePlayer ruler = null;
+
+                try {
+                    BasePlayer.Find(args[0]);
+                } catch (Exception e) {
+                }
+
                 if (ruler == null) { PrintToChat(lang.GetMessage("PlayerNotFound", this), args[0]); return; }
                 SetRuler(ruler);
                 PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
