@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.3")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.5")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -15,8 +15,31 @@ namespace Oxide.Plugins {
         PSConfig config;
         private Core.Libraries.Time _time = GetLibrary<Core.Libraries.Time>();
         static PoliticalSurvival _instance;
+        string ConfigVersion = "0.0.2";
 
         #region Settings Class
+
+        public class TaxSource {
+            public bool DispenserGather;
+            public bool CropGather;
+            public bool DispenserBonus;
+            public bool QuarryGather;
+            public bool ExcavatorGather;
+            public bool CollectiblePickup;
+            public bool SurveyGather;
+
+            public TaxSource createDefault() {
+                DispenserGather = true;
+                CropGather = true;
+                DispenserBonus = true;
+                QuarryGather = true;
+                ExcavatorGather = true;
+                CollectiblePickup = true;
+                SurveyGather = true;
+                return this;
+            }
+        }
+
         private class PSConfig {
             public string Version;
             public bool showWelcomeMsg;
@@ -31,6 +54,8 @@ namespace Oxide.Plugins {
 
             public int taxMin;
             public int taxMax;
+
+            public TaxSource taxSource;
         }
 
         public class Settings {
@@ -235,6 +260,12 @@ namespace Oxide.Plugins {
             LoadServerMessages();
             LoadSettings();
             config = Config.ReadObject<PSConfig>();
+
+            if (!config.Version.Equals(ConfigVersion)) {
+                Puts("Config outdated, will update to new version.");
+                config = UpgradeConfig(config.Version, ConfigVersion);
+            }
+
             Puts("Political Survival is starting...");
 
             worldSize = ConVar.Server.worldsize;
@@ -256,16 +287,8 @@ namespace Oxide.Plugins {
                 SaveSettings();
             }
 
-            if (currentRuler != null) {
-                Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
+            Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
 
-                //TODO add a timer to notify of no ruler
-                /*
-                if (GameConfig.IsHelpNotiferEnabled)
-                    Timers.Add("HelpNotifier", timer.Repeat(GameConfig.HelpNotifierInverval, 0, () => AdviseRules()));
-                */
-                Timers.Add("RulerPromote", timer.Repeat(60, 0, () => TryForceRuler()));
-            }
             SaveSettings();
             Puts($"Ruler offline at {rulerOfflineAt}");
             if (rulerOfflineAt != 0) {
@@ -313,28 +336,35 @@ namespace Oxide.Plugins {
         #region GatheringHooks
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item) {
             DebugLog("OnDispenserGather start");
-            if (dispenser == null || entity == null || Item == null || settings.GetTaxContainerID() == 0) return;
+            if (!config.taxSource.DispenserGather || dispenser == null || entity == null || Item == null || settings.GetTaxContainerID() == 0) return;
+
             BasePlayer player = entity as BasePlayer;
             DebugLog("OnDispenserGather stage 2 " + item.flags.ToString() + " " + item.amount + " " + player.displayName);
             int netAmount = AddToTaxContainer(item, player.displayName);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
 
-        void OnCropGather(PlantEntity plant, Item item, BasePlayer player) {
-            DebugLog("OnPlantGather start");
-            int netAmount = AddToTaxContainer(item, player.displayName);
-            item.amount = (netAmount > 0) ? netAmount : item.amount;
-        }
-
         private void OnDispenserBonus(ResourceDispenser dispenser, BaseEntity entity, Item item) {
+            if (!config.taxSource.DispenserBonus) return;
+
             BasePlayer player = entity as BasePlayer;
             DebugLog("OnDispenserBonus start");
             int netAmount = AddToTaxContainer(item, player.displayName);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
 
+        void OnCropGather(PlantEntity plant, Item item, BasePlayer player) {
+            if (!config.taxSource.CropGather) return;
+
+            DebugLog("OnPlantGather start");
+            int netAmount = AddToTaxContainer(item, player.displayName);
+            item.amount = (netAmount > 0) ? netAmount : item.amount;
+        }
+
         private void OnQuarryGather(MiningQuarry quarry, Item item) {
             DebugLog("OnQuarryGather start");
+            if (!config.taxSource.QuarryGather) return;
+
             int netAmount = AddToTaxContainer(item, quarry.name);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
@@ -342,18 +372,24 @@ namespace Oxide.Plugins {
 
         private void OnExcavatorGather(ExcavatorArm excavator, Item item) {
             DebugLog("OnExcavatorGather start");
+            if (!config.taxSource.ExcavatorGather) return;
+
             int netAmount = AddToTaxContainer(item, excavator.name);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
 
         private void OnCollectiblePickup(Item item, BasePlayer player) {
             DebugLog("OnCollectiblePickup start");
+            if (!config.taxSource.CollectiblePickup) return;
+
             int netAmount = AddToTaxContainer(item, player.displayName);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
 
         private void OnSurveyGather(SurveyCharge surveyCharge, Item item) {
             DebugLog("OnSurveyGather start");
+            if (!config.taxSource.SurveyGather) return;
+
             int netAmount = AddToTaxContainer(item, surveyCharge.name);
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
@@ -399,16 +435,23 @@ namespace Oxide.Plugins {
             if (player != null) {
                 if (IsRuler(player.userID)) {
                     BasePlayer killer = null;
-
+                    Puts("Pol test 1");
                     if (info != null)
                         killer = info.Initiator.ToPlayer();
+                    Puts("Pol test 2");
 
                     if (killer != null && killer.userID != player.userID && !(killer is NPCPlayer)) {
+                        Puts("Pol test 3");
                         SetRuler(killer);
+                        Puts("Pol test 4");
                         PrintToChat(string.Format(lang.GetMessage("RulerMurdered", this), killer.displayName));
+                        Puts("Pol test 5");
                     } else {
+                        Puts("Pol test 10");
                         settings.SetRuler(0).SetRulerName(null);
+                        Puts("Pol test 11");
                         currentRuler = null;
+                        Puts("Pol test 12");
                         PrintToChat(string.Format(lang.GetMessage("RulerDied", this)));
                     }
                     SaveSettings();
@@ -471,6 +514,7 @@ namespace Oxide.Plugins {
                 config.taxMax = taxMax;
                 PrintToChat(player, $"Tax range set to Min:{config.taxMin}% - Max:{config.taxMax}%");
                 SaveConfig();
+                SaveSettings();
             }
         }
 
@@ -627,7 +671,7 @@ namespace Oxide.Plugins {
         }
 
         bool IsRuler(ulong steamId) {
-            return settings.GetRuler() == steamId;
+            return currentRuler != null && currentRuler.userID == steamId;
         }
 
         public bool CanAffordheliStrike(BasePlayer player) {
@@ -657,13 +701,6 @@ namespace Oxide.Plugins {
             Puts("New Ruler! " + ruler.displayName);
             settings.SetRuler(ruler.userID).SetRulerName(ruler.displayName).SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity).SetRealmName(GetMsg("DefaultRealm")).SetRulerSince(_time.GetUnixTimestamp());
             currentRuler = ruler;
-
-            if (config.broadcastRulerPosition || config.broadcastRulerPositionAfterPercentage > 0) {
-                timers["AdviseRulerPosition"].Destroy();
-                timers.Remove("AdviseRulerPosition");
-                Timers.Add("AdviseRulerPosition", timer.Repeat(config.broadcastRulerPositionAfter, 0, () => AdviseRulerPosition()));
-            }
-
             SaveSettings();
         }
 
@@ -767,9 +804,8 @@ namespace Oxide.Plugins {
             }
         }
         #endregion
-        #region Timers and Events
 
-
+        #region Misc
         private MonumentInfo FindMonument(Vector3 pos) {
             MonumentInfo monumentClosest;
 
@@ -786,61 +822,47 @@ namespace Oxide.Plugins {
             }
             return null;
         }
+        #endregion
 
+        #region Timers and Events
         void AdviseRulerPosition() {
-            Puts("AdviseRulerPosition");
             if (currentRuler != null && (config.broadcastRulerPosition || (config.broadcastRulerPositionAfterPercentage > 0 && settings.GetTaxLevel() > config.broadcastRulerPositionAfterPercentage))) {
                 bool moved;
-                if (currentRuler == null) return;
+
                 BasePlayer ruler = BasePlayer.Find(currentRuler.UserIDString);
                 if (ruler == null) return;
                 string rulerMonument = FindMonument(ruler.transform.position)?.displayPhrase.english;
                 string rulerGrid = locator.GridReference(ruler, out moved);
                 string rulerCoords = rulerMonument != null && rulerMonument.Length > 0 ? rulerMonument : rulerGrid;
-                /*
-                bool movedP;
-                if (DebugMode) {
-                    BasePlayer pho = BasePlayer.Find("76561198007433923"); //this is only for development purposes, and testing the grid system. 
-                    if (pho != null && pho.IsConnected) {
-                        Puts("AdviseRulerPosition Pho3niX90");
-                        string monument = FindMonument(pho.transform.position)?.displayPhrase.english;
-                        string grid = locator.GridReference(pho, out movedP);
-                        string rulerCoordsP = monument != null && monument.Length > 0 ? monument : grid;
-                        if (movedP)
-                            PrintToChat(pho, "You moved, new location is: {1}", currentRuler.displayName, rulerCoordsP);
-                        else
-                            PrintToChat(pho, "You location is: {1}", currentRuler.displayName, rulerCoordsP);
-                    }
-                }
-                */
 
                 if (moved)
                     PrintToChat(GetMsg("RulerLocation_Moved"), currentRuler.displayName, rulerCoords);
                 else
                     PrintToChat(GetMsg("RulerLocation_Static"), currentRuler.displayName, rulerCoords);
-
-                /*} else
-                    PrintToChat(Text.Broadcast_ClaimAvailable);
-           }*/
+            }
+            if (currentRuler == null) {
+                Timers.Add("RulerPromote", timer.Repeat(60, 0, () => TryForceRuler()));
             }
         }
 
-        // AdviseRules is called every m seconds, and reminds players where they can find the
-        // Game Mode rules. Useful at the moment, but probably a bit annoying in the long term
-        public void AdviseRules() {
-            // PrintToChat(Text.Broadcast_HelpAdvice);
-        }
-
         public bool TryForceNewRuler(bool force) {
+            Puts("fnr 1");
             if (currentRuler != null && !force) return false;
-            int index = UnityEngine.Random.Range(0, BasePlayer.activePlayerList.Count);
+            Puts("fnr 2");
+            int index = UnityEngine.Random.Range(0, BasePlayer.activePlayerList.Count - 1);
+            Puts("fnr 3");
             SetRuler(BasePlayer.activePlayerList[index]);
+            Puts("fnr 4");
             return true;
         }
 
         #endregion
         void SaveSettings() {
             Interface.Oxide.DataFileSystem.WriteObject<Settings>("PoliticalSurvival", settings, true);
+        }
+
+        private void SaveConfig() {
+            Config.WriteObject<PSConfig>(config, true);
         }
 
         void LoadSettings() {
@@ -867,21 +889,33 @@ namespace Oxide.Plugins {
         }
 
         PSConfig UpgradeConfig(string oldVersion = "", string newVersion = "") {
+
+            if (!oldVersion.Equals("") || !newVersion.Equals("")) {
+                if (newVersion.Equals("0.0.2")) {
+                    config.Version = ConfigVersion;
+                    config.taxMin = 0;
+                    config.taxMax = 35;
+                    config.taxSource = new TaxSource().createDefault();
+                    SaveConfig();
+                    return config;
+                }
+            }
             return new PSConfig {
                 Version = "0.0.1",
                 showWelcomeMsg = false,
-                maxHelis = 2,
 
+                maxHelis = 2,
                 heliItemCost = 13994,
                 heliItemCostQty = 500,
 
                 broadcastRulerPosition = false,
-                broadcastRulerPositionAfter = 500,
+                broadcastRulerPositionAfter = 60,
                 broadcastRulerPositionAfterPercentage = 10,
 
-
                 taxMin = 0,
-                taxMax = 35
+                taxMax = 35,
+
+                taxSource = new TaxSource().createDefault()
             };
         }
 
