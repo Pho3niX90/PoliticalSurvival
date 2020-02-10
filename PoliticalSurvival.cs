@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.5")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.6")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
@@ -65,6 +65,7 @@ namespace Oxide.Plugins {
             public ulong ruler;
             public string rulerName;
             public uint rulerSince;
+            public int resourcesGot;
             public string realm;
 
             public Settings(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm) {
@@ -77,6 +78,10 @@ namespace Oxide.Plugins {
             }
 
             public Settings() { }
+
+            public int GetResourceCount() {
+                return this.resourcesGot;
+            }
 
             public Settings SetRulerSince(uint since) {
                 rulerSince = since;
@@ -118,10 +123,10 @@ namespace Oxide.Plugins {
                 return ruler;
             }
             public double GetRuleLengthInMinutes() {
-                return (new Core.Libraries.Time().GetUnixTimestamp() - rulerSince) / 60.0 / 1000.0;
+                return (new Core.Libraries.Time().GetUnixTimestamp() - rulerSince) / 60.0;
             }
             public double GetRulerOfflineMinutes() {
-                return (new Core.Libraries.Time().GetUnixTimestamp() - _instance.rulerOfflineAt) / 60.0 / 1000.0;
+                return (new Core.Libraries.Time().GetUnixTimestamp() - _instance.rulerOfflineAt) / 60.0;
             }
             public Settings SetRulerName(string name) {
                 rulerName = name;
@@ -292,7 +297,8 @@ namespace Oxide.Plugins {
             SaveSettings();
             Puts($"Ruler offline at {rulerOfflineAt}");
             if (rulerOfflineAt != 0) {
-                ForceNewOfflineRuler(); //TODO get a better way. 
+                if (rulerOfflineAt != 0 && settings.GetRulerOfflineMinutes() >= (1 * 60))
+                    TryForceNewRuler(true);
             }
         }
 
@@ -314,23 +320,14 @@ namespace Oxide.Plugins {
         }
 
         void OnPlayerDisconnected(BasePlayer player, string reason) {
-            // Puts("OnPlayerDisconnected 1");
             if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
-            // Puts("OnPlayerDisconnected 2");
-            // Puts("isSettings null? " + (settings == null));
-            // Puts("iscurrentRuler null? " + (currentRuler == null));
             if (currentRuler != null && player.userID == currentRuler.userID) {
-                // Puts("OnPlayerDisconnected 3");
                 rulerOfflineAt = _time.GetUnixTimestamp();
-                // Puts("OnPlayerDisconnected 4");
-                timer.Once(1 * 60 * 60, () => ForceNewOfflineRuler()); //TODO get a better way. 
+                timer.Once(1 * 60 * 60, () => {
+                    if (rulerOfflineAt != 0 && settings.GetRulerOfflineMinutes() >= (1 * 60)) //TODO make time changeable
+                        TryForceNewRuler(true);
+                }); //TODO get a better way. 
             }
-        }
-
-        void ForceNewOfflineRuler() {
-            Puts($"Ruler offline for {settings.GetRulerOfflineMinutes()}");
-            if (rulerOfflineAt != 0 && settings.GetRulerOfflineMinutes() >= (1 * 60)) //TODO make time changeable
-                TryForceNewRuler(true);
         }
 
         #region GatheringHooks
@@ -405,8 +402,12 @@ namespace Oxide.Plugins {
             ItemDefinition ToAdd = ItemManager.FindItemDefinition(item.info.itemid);
             int Tax = Convert.ToInt32(Math.Ceiling((item.amount * settings.GetTaxLevel()) / 100));
 
-            if (ToAdd != null) {
-                FindStorageContainer(settings.GetTaxContainerID()).inventory.AddItem(ToAdd, Tax);
+            ItemContainer container = FindStorageContainer(settings.GetTaxContainerID()).inventory;
+            if (ToAdd != null && container != null) {
+                if (item.CanMoveTo(container)) {
+                    container.AddItem(ToAdd, Tax);
+                    settings.resourcesGot += Tax;
+                }
             }
 
             DebugLog("User " + displayName + " gathered " + item.amount + " x " + item.info.shortname + ", and " + Tax + " was taxed");
@@ -415,7 +416,6 @@ namespace Oxide.Plugins {
         }
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info) {
-            Puts("OnEntityDeath start");
             if (entity == null) return;
             BasePlayer player = entity as BasePlayer;
 
@@ -431,6 +431,7 @@ namespace Oxide.Plugins {
                      }
                  }
              }*/
+
             if (player != null) {
                 if (IsRuler(player.userID)) {
                     BasePlayer killer = null;
@@ -460,7 +461,7 @@ namespace Oxide.Plugins {
 
         public void TryForceRuler() {
             if (currentRuler == null && TryForceNewRuler(false))
-                PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
+                PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
         }
         #region Commands
 
@@ -469,7 +470,7 @@ namespace Oxide.Plugins {
             if (!player.IsAdmin || !IsRuler(player.userID)) return;
             if (args.Length == 0) {
                 if (TryForceNewRuler(true))
-                    PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
+                    PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
             } else if (args.Length == 1) {
                 BasePlayer ruler = null;
 
@@ -480,7 +481,7 @@ namespace Oxide.Plugins {
 
                 if (ruler == null) { PrintToChat(lang.GetMessage("PlayerNotFound", this), args[0]); return; }
                 SetRuler(ruler);
-                PrintToChat("{0} has been made the new Ruler. Kill him!", currentRuler.displayName);
+                PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
             }
         }
 
@@ -586,6 +587,8 @@ namespace Oxide.Plugins {
             }
             SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRealmName", this, player.UserIDString) + ": </color>" + settings.GetRealmName());
             SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoTaxLevel", this, player.UserIDString) + ": </color>" + settings.GetTaxLevel() + "%");
+            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRuleLength", this, player.UserIDString) + ": </color>" + Math.Round(settings.GetRuleLengthInMinutes()) + " minutes");
+            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoResources", this, player.UserIDString) + ": </color>" + settings.GetResourceCount());
             if (IsRuler(player.userID)) {
                 SendReply(player, lang.GetMessage("SettingNewTaxChest", this, player.UserIDString));
                 SendReply(player, string.Format(lang.GetMessage("InfoTaxCmd", this, player.UserIDString), config.taxMin, config.taxMax) + ": " + settings.GetTaxLevel() + "%");
@@ -947,10 +950,14 @@ namespace Oxide.Plugins {
             serverMessages.Add("SetNewTaxChest", "You have set the new tax chest.");
             serverMessages.Add("ClaimRuler", "There is no ruler! <color=#008080ff>/claimruler</color> to become the new Ruler!");
             serverMessages.Add("IsNowRuler", "is now the Ruler!");
+
             serverMessages.Add("InfoRuler", "Ruler");
             serverMessages.Add("InfoRealmName", "Realm Name");
             serverMessages.Add("InfoTaxLevel", "Tax level");
+            serverMessages.Add("InfoRuleLength", "Rule Length");
+            serverMessages.Add("InfoResources", "Resource received");
             serverMessages.Add("InfoTaxCmd", "Use <color=#008080ff>/settax {0}-{1}</color> to set tax level");
+
             serverMessages.Add("RulerLocation_Moved", "Ruler <color=#ff0000ff>{0}</color> is on the move, now at <color=#ff0000ff>{1}</color>.");
             serverMessages.Add("RulerLocation_Static", "Ruler <color=#ff0000ff>{0}</color> is camping out at <color=#ff0000ff>{1}</color>");
             serverMessages.Add("UpdateTaxMessage", "The ruler has changed the tax from <color=#ff0000ff>{0}%</color> to <color=#ff0000ff>{1}%</color>");
