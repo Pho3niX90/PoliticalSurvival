@@ -11,11 +11,12 @@ namespace Oxide.Plugins {
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         public bool DebugMode = false;
-        Settings settings;
+        Ruler ruler;
         PSConfig config;
         private Core.Libraries.Time _time = GetLibrary<Core.Libraries.Time>();
         static PoliticalSurvival _instance;
-        string ConfigVersion = "0.0.2";
+        private List<Ruler> rulerList = new List<Ruler>();
+        string ConfigVersion = "0.0.3";
 
         #region Settings Class
 
@@ -58,7 +59,7 @@ namespace Oxide.Plugins {
             public TaxSource taxSource;
         }
 
-        public class Settings {
+        public class Ruler {
             public Vector3 taxContainerVector3;
             public uint taxContainerID;
             public double tax;
@@ -68,7 +69,7 @@ namespace Oxide.Plugins {
             public int resourcesGot;
             public string realm;
 
-            public Settings(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm) {
+            public Ruler(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm) {
                 taxContainerVector3 = tcv4;
                 taxContainerID = txId;
                 tax = tx;
@@ -77,14 +78,19 @@ namespace Oxide.Plugins {
                 realm = rlm;
             }
 
-            public Settings() { }
+            public Ruler() { }
 
             public int GetResourceCount() {
-                return this.resourcesGot;
+                return resourcesGot;
             }
 
-            public Settings SetRulerSince(uint since) {
+            public Ruler SetRulerSince(uint since) {
                 rulerSince = since;
+                return this;
+            }
+
+            public Ruler SetResourcesGot(int amnt) {
+                resourcesGot = amnt;
                 return this;
             }
 
@@ -92,7 +98,7 @@ namespace Oxide.Plugins {
                 return rulerSince;
             }
 
-            public Settings SetTaxContainerVector3(Vector3 vec) {
+            public Ruler SetTaxContainerVector3(Vector3 vec) {
                 taxContainerVector3 = vec;
                 return this;
             }
@@ -100,21 +106,21 @@ namespace Oxide.Plugins {
             public Vector3 GetTaxContainerVector3() {
                 return taxContainerVector3;
             }
-            public Settings SetTaxContainerID(uint storage) {
+            public Ruler SetTaxContainerID(uint storage) {
                 taxContainerID = storage;
                 return this;
             }
             public uint GetTaxContainerID() {
                 return taxContainerID;
             }
-            public Settings SetTaxLevel(double tx) {
+            public Ruler SetTaxLevel(double tx) {
                 tax = tx;
                 return this;
             }
             public double GetTaxLevel() {
                 return tax;
             }
-            public Settings SetRuler(ulong rlr) {
+            public Ruler SetRuler(ulong rlr) {
                 ruler = rlr;
                 rulerSince = (new Core.Libraries.Time()).GetUnixTimestamp();
                 return this;
@@ -128,14 +134,14 @@ namespace Oxide.Plugins {
             public double GetRulerOfflineMinutes() {
                 return (new Core.Libraries.Time().GetUnixTimestamp() - _instance.rulerOfflineAt) / 60.0;
             }
-            public Settings SetRulerName(string name) {
+            public Ruler SetRulerName(string name) {
                 rulerName = name;
                 return this;
             }
             public string GetRulerName() {
                 return rulerName;
             }
-            public Settings SetRealmName(string rlm) {
+            public Ruler SetRealmName(string rlm) {
                 realm = rlm;
                 return this;
             }
@@ -260,10 +266,10 @@ namespace Oxide.Plugins {
         protected Dictionary<string, Timer> Timers { get { return timers; } }
         #endregion
 
-        private void Init() {
+        private void Loaded() {
             _instance = this;
             LoadServerMessages();
-            LoadSettings();
+            LoadRuler();
             config = Config.ReadObject<PSConfig>();
 
             if (!config.Version.Equals(ConfigVersion)) {
@@ -279,33 +285,38 @@ namespace Oxide.Plugins {
             locator = new LocatorWithDelay(liveLocator, 60);
 
 
-            Puts("Realm name is " + settings.GetRealmName());
-            Puts("Tax level is " + settings.GetTaxLevel());
-            Puts("Ruler is " + settings.GetRuler());
-            Puts("TaxChest is set " + !settings.GetTaxContainerVector3().Equals(Vector3.negativeInfinity));
+            Puts("Realm name is " + ruler.GetRealmName());
+            Puts("Tax level is " + ruler.GetTaxLevel());
+            Puts("Ruler is " + ruler.GetRuler());
+            Puts("TaxChest is set " + !ruler.GetTaxContainerVector3().Equals(Vector3.negativeInfinity));
             Puts("Political Survival: Started");
-            currentRuler = GetPlayer(settings.GetRuler().ToString());
+            currentRuler = GetPlayer(ruler.GetRuler().ToString());
             Puts("Current ruler " + (currentRuler != null ? "is set" : "is null"));
 
-            if (settings.GetRulerSince() == 0) {
-                settings.SetRulerSince(_time.GetUnixTimestamp());
-                SaveSettings();
+            if (ruler.GetRulerSince() == 0) {
+                ruler.SetRulerSince(_time.GetUnixTimestamp());
+                SaverRuler();
             }
 
             Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
 
-            SaveSettings();
+            SaverRuler();
             Puts($"Ruler offline at {rulerOfflineAt}");
             if (rulerOfflineAt != 0) {
-                if (rulerOfflineAt != 0 && settings.GetRulerOfflineMinutes() >= (1 * 60))
+                if (rulerOfflineAt != 0 && ruler.GetRulerOfflineMinutes() >= (1 * 60))
                     TryForceNewRuler(true);
             }
+        }
+
+        void OnServerShutdown() {
+            SaveConfig();
+            SaverRuler();
         }
 
         void Unload() {
             Puts("Unload called");
 
-            SaveSettings();
+            SaverRuler();
 
             foreach (Timer t in timers.Values)
                 t.Destroy();
@@ -313,27 +324,27 @@ namespace Oxide.Plugins {
         }
 
         void OnPlayerInit(BasePlayer player) {
-            if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerConnected", this, player.UserIDString) + " " + settings.GetRealmName());
-            if (currentRuler != null && settings.ruler == currentRuler.userID) {
+            if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerConnected", this, player.UserIDString) + " " + ruler.GetRealmName());
+            if (currentRuler != null && ruler.ruler == currentRuler.userID) {
                 rulerOfflineAt = 0;
             }
         }
 
         void OnPlayerDisconnected(BasePlayer player, string reason) {
-            if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + settings.GetRealmName());
+            if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + ruler.GetRealmName());
             if (currentRuler != null && player.userID == currentRuler.userID) {
                 rulerOfflineAt = _time.GetUnixTimestamp();
                 timer.Once(1 * 60 * 60, () => {
-                    if (rulerOfflineAt != 0 && settings.GetRulerOfflineMinutes() >= (1 * 60)) //TODO make time changeable
+                    if (rulerOfflineAt != 0 && ruler.GetRulerOfflineMinutes() >= (1 * 60)) //TODO make time changeable
                         TryForceNewRuler(true);
-                }); //TODO get a better way. 
+                });
             }
         }
 
         #region GatheringHooks
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item) {
             DebugLog("OnDispenserGather start");
-            if (!config.taxSource.DispenserGather || dispenser == null || entity == null || Item == null || settings.GetTaxContainerID() == 0) return;
+            if (!config.taxSource.DispenserGather || dispenser == null || entity == null || Item == null || ruler.GetTaxContainerID() == 0) return;
 
             BasePlayer player = entity as BasePlayer;
             DebugLog("OnDispenserGather stage 2 " + item.flags.ToString() + " " + item.amount + " " + player.displayName);
@@ -397,16 +408,16 @@ namespace Oxide.Plugins {
             if (!IsChestSet()) return -1;
 
             DebugLog("AddToTaxContainer start");
-            if (item == null || settings.GetTaxContainerID() == 0 || settings.GetRuler() == 0 || settings.GetTaxLevel() == 0 || settings.GetTaxContainerVector3() == Vector3.negativeInfinity) return -1;
+            if (item == null || ruler.GetTaxContainerID() == 0 || ruler.GetRuler() == 0 || ruler.GetTaxLevel() == 0 || ruler.GetTaxContainerVector3() == Vector3.negativeInfinity) return -1;
 
             ItemDefinition ToAdd = ItemManager.FindItemDefinition(item.info.itemid);
-            int Tax = Convert.ToInt32(Math.Ceiling((item.amount * settings.GetTaxLevel()) / 100));
+            int Tax = Convert.ToInt32(Math.Ceiling((item.amount * ruler.GetTaxLevel()) / 100));
 
-            ItemContainer container = FindStorageContainer(settings.GetTaxContainerID()).inventory;
+            ItemContainer container = FindStorageContainer(ruler.GetTaxContainerID()).inventory;
             if (ToAdd != null && container != null) {
                 if (item.CanMoveTo(container)) {
                     container.AddItem(ToAdd, Tax);
-                    settings.resourcesGot += Tax;
+                    ruler.resourcesGot += Tax;
                 }
             }
 
@@ -441,20 +452,14 @@ namespace Oxide.Plugins {
                     Puts("Pol test 2");
 
                     if (killer != null && killer.userID != player.userID && !(killer is NPCPlayer)) {
-                        Puts("Pol test 3");
                         SetRuler(killer);
-                        Puts("Pol test 4");
                         PrintToChat(string.Format(lang.GetMessage("RulerMurdered", this), killer.displayName));
-                        Puts("Pol test 5");
                     } else {
-                        Puts("Pol test 10");
-                        settings.SetRuler(0).SetRulerName(null);
-                        Puts("Pol test 11");
+                        ruler.SetRuler(0).SetRulerName(null);
                         currentRuler = null;
-                        Puts("Pol test 12");
                         PrintToChat(string.Format(lang.GetMessage("RulerDied", this)));
                     }
-                    SaveSettings();
+                    SaverRuler();
                 }
             }
         }
@@ -473,10 +478,10 @@ namespace Oxide.Plugins {
                     PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
             } else if (args.Length == 1) {
                 BasePlayer ruler = null;
-
                 try {
-                    BasePlayer.Find(args[0]);
+                    ruler = BasePlayer.Find(args[0]);
                 } catch (Exception e) {
+                    PrintToChat("ERR: " + lang.GetMessage("PlayerNotFound", this), args[0]);
                 }
 
                 if (ruler == null) { PrintToChat(lang.GetMessage("PlayerNotFound", this), args[0]); return; }
@@ -519,7 +524,7 @@ namespace Oxide.Plugins {
                 config.taxMax = taxMax;
                 PrintToChat(player, $"Tax range set to Min:{config.taxMin}% - Max:{config.taxMax}%");
                 SaveConfig();
-                SaveSettings();
+                SaverRuler();
             }
         }
 
@@ -542,7 +547,7 @@ namespace Oxide.Plugins {
 
                     if (boxStorage != null) {
                         DebugLog("Test 4");
-                        settings.SetTaxContainerVector3(boxPosition).SetTaxContainerID(entity.net.ID);
+                        ruler.SetTaxContainerVector3(boxPosition).SetTaxContainerID(entity.net.ID);
 
                         if (entity.ShortPrefabName.Contains("box.wooden")) {
                             entity.skinID = 1482844040; //https://steamcommunity.com/sharedfiles/filedetails/?id=1482844040&searchtext=
@@ -550,7 +555,7 @@ namespace Oxide.Plugins {
                         }
 
                         DebugLog("Chest set");
-                        SaveSettings();
+                        SaverRuler();
                         SendReply(player, lang.GetMessage("SetNewTaxChest", this, player.UserIDString));
                     }
                 } else {
@@ -572,26 +577,26 @@ namespace Oxide.Plugins {
         void InfoCommand(BasePlayer player, string command, string[] arguments) {
             string RulerName = string.Empty;
 
-            if (settings.GetRuler() > 0) {
-                BasePlayer BaseRuler = BasePlayer.FindAwakeOrSleeping(settings.GetRuler().ToString());
+            if (ruler.GetRuler() > 0) {
+                BasePlayer BaseRuler = BasePlayer.FindAwakeOrSleeping(ruler.GetRuler().ToString());
                 RulerName = BaseRuler != null ? BaseRuler.displayName : lang.GetMessage("ClaimRuler", this, player.UserIDString);
             } else {
                 RulerName = lang.GetMessage("ClaimRuler", this, player.UserIDString);
             }
 
 
-            if (settings.GetRuler() != 0) {
-                SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRuler", this, player.UserIDString) + ": </color>" + settings.GetRulerName());
+            if (ruler.GetRuler() != 0) {
+                SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRuler", this, player.UserIDString) + ": </color>" + ruler.GetRulerName());
             } else {
-                SendReply(player, lang.GetMessage("ClaimRuler", this, player.UserIDString) + ": " + settings.GetRulerName());
+                SendReply(player, lang.GetMessage("ClaimRuler", this, player.UserIDString) + ": " + ruler.GetRulerName());
             }
-            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRealmName", this, player.UserIDString) + ": </color>" + settings.GetRealmName());
-            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoTaxLevel", this, player.UserIDString) + ": </color>" + settings.GetTaxLevel() + "%");
-            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRuleLength", this, player.UserIDString) + ": </color>" + Math.Round(settings.GetRuleLengthInMinutes()) + " minutes");
-            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoResources", this, player.UserIDString) + ": </color>" + settings.GetResourceCount());
+            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRealmName", this, player.UserIDString) + ": </color>" + ruler.GetRealmName());
+            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoTaxLevel", this, player.UserIDString) + ": </color>" + ruler.GetTaxLevel() + "%" + ((!IsChestSet()) ? " (0%, chest not set)" : ""));
+            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoRuleLength", this, player.UserIDString) + ": </color>" + Math.Round(ruler.GetRuleLengthInMinutes()) + " minutes");
+            SendReply(player, "<color=#008080ff>" + lang.GetMessage("InfoResources", this, player.UserIDString) + ": </color>" + ruler.GetResourceCount());
             if (IsRuler(player.userID)) {
                 SendReply(player, lang.GetMessage("SettingNewTaxChest", this, player.UserIDString));
-                SendReply(player, string.Format(lang.GetMessage("InfoTaxCmd", this, player.UserIDString), config.taxMin, config.taxMax) + ": " + settings.GetTaxLevel() + "%");
+                SendReply(player, string.Format(lang.GetMessage("InfoTaxCmd", this, player.UserIDString), config.taxMin, config.taxMax) + ": " + ruler.GetTaxLevel() + "%");
             }
         }
 
@@ -608,10 +613,10 @@ namespace Oxide.Plugins {
             if (IsRuler(player.userID)) {
                 double newTaxLevel = 0.0;
                 if (double.TryParse(args[0], out newTaxLevel)) {
-                    double oldTax = settings.GetTaxLevel();
-                    if (newTaxLevel == settings.GetTaxLevel())
+                    double oldTax = ruler.GetTaxLevel();
+                    if (newTaxLevel == ruler.GetTaxLevel())
                         return;
-                    Puts("Tax have been changed by " + player.displayName + " from " + settings.GetTaxLevel() + " to " + newTaxLevel);
+                    Puts("Tax have been changed by " + player.displayName + " from " + ruler.GetTaxLevel() + " to " + newTaxLevel);
                     Puts($"Tax {config.taxMin} {config.taxMax}");
                     if (newTaxLevel > config.taxMax)
                         newTaxLevel = config.taxMax;
@@ -659,7 +664,7 @@ namespace Oxide.Plugins {
         }
 
         bool IsChestSet() {
-            return settings.taxContainerID > 0;
+            return ruler.taxContainerID > 0;
         }
 
         BasePlayer GetPlayer(string partialNameOrID) {
@@ -687,7 +692,7 @@ namespace Oxide.Plugins {
 
         public void OrderheliStrike(BasePlayer playerToAttack) {
             // Deduct the cost
-            if (currentRuler == null) currentRuler = GetPlayer(settings.GetRuler().ToString());
+            if (currentRuler == null) currentRuler = GetPlayer(ruler.GetRuler().ToString());
             List<Item> collector = new List<Item>();
             currentRuler.inventory.Take(collector, config.heliItemCost, config.heliItemCostQty);
 
@@ -704,24 +709,24 @@ namespace Oxide.Plugins {
             }
         }
 
-        void SetRuler(BasePlayer ruler) {
-            Puts("New Ruler! " + ruler.displayName);
-            settings.SetRuler(ruler.userID).SetRulerName(ruler.displayName).SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity).SetRealmName(GetMsg("DefaultRealm")).SetRulerSince(_time.GetUnixTimestamp());
-            currentRuler = ruler;
-            SaveSettings();
+        void SetRuler(BasePlayer bpruler) {
+            Puts("New Ruler! " + bpruler.displayName);
+            ruler.SetRuler(bpruler.userID).SetRulerName(bpruler.displayName).SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity).SetRealmName(GetMsg("DefaultRealm")).SetRulerSince(_time.GetUnixTimestamp()).SetResourcesGot(0);
+            currentRuler = bpruler;
+            SaverRuler();
         }
 
         void SetTaxLevel(double newTaxLevel) {
-            settings.SetTaxLevel(newTaxLevel);
-            SaveSettings();
+            ruler.SetTaxLevel(newTaxLevel);
+            SaverRuler();
         }
 
         void SetRealmName(string newName) {
             if (newName.Length > 36)
                 newName = newName.Substring(0, 36);
             PrintToChat(string.Format(lang.GetMessage("RealmRenamed", this), newName));
-            settings.SetRealmName(newName);
-            SaveSettings();
+            ruler.SetRealmName(newName);
+            SaverRuler();
         }
 
         StorageContainer FindStorageContainer(Vector3 position) {
@@ -729,7 +734,7 @@ namespace Oxide.Plugins {
                 Vector3 ContPosition = cont.transform.position;
                 if (ContPosition == position) {
                     Puts("Tax Container instance found: " + cont.GetEntity().GetInstanceID());
-                    settings.SetTaxContainerID(cont.net.ID);
+                    ruler.SetTaxContainerID(cont.net.ID);
                     return cont;
                 }
             }
@@ -833,7 +838,7 @@ namespace Oxide.Plugins {
 
         #region Timers and Events
         void AdviseRulerPosition() {
-            if (currentRuler != null && (config.broadcastRulerPosition || (config.broadcastRulerPositionAfterPercentage > 0 && settings.GetTaxLevel() > config.broadcastRulerPositionAfterPercentage))) {
+            if (currentRuler != null && (config.broadcastRulerPosition || (config.broadcastRulerPositionAfterPercentage > 0 && ruler.GetTaxLevel() > config.broadcastRulerPositionAfterPercentage))) {
                 bool moved;
 
                 BasePlayer ruler = BasePlayer.Find(currentRuler.UserIDString);
@@ -864,27 +869,27 @@ namespace Oxide.Plugins {
         }
 
         #endregion
-        void SaveSettings() {
-            Interface.Oxide.DataFileSystem.WriteObject<Settings>("PoliticalSurvival", settings, true);
+        void SaverRuler() {
+            Interface.Oxide.DataFileSystem.WriteObject<Ruler>("PoliticalSurvival", ruler, true);
         }
 
         private void SaveConfig() {
             Config.WriteObject<PSConfig>(config, true);
         }
 
-        void LoadSettings() {
+        void LoadRuler() {
             if (Interface.Oxide.DataFileSystem.ExistsDatafile("PoliticalSurvival")) {
-                settings = Interface.Oxide.DataFileSystem.ReadObject<Settings>("PoliticalSurvival");
-                Puts("Settings loaded");
+                ruler = Interface.Oxide.DataFileSystem.ReadObject<Ruler>("PoliticalSurvival");
+                Puts("ruler loaded");
             } else {
                 Puts("Settings doesn't exist, creating default");
-                settings = new Settings()
+                ruler = new Ruler()
                 .SetRuler(0)
                 .SetRealmName(lang.GetMessage("DefaultRealm", this))
                 .SetTaxLevel(0.0)
                 .SetTaxContainerID(0)
                 .SetTaxContainerVector3(Vector3.negativeInfinity);
-                SaveSettings();
+                SaverRuler();
             }
         }
 
