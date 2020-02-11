@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.7")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.8")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         bool firstRun = false;
@@ -18,6 +18,7 @@ namespace Oxide.Plugins {
         static PoliticalSurvival _instance;
         private List<Ruler> rulerList = new List<Ruler>();
         string ConfigVersion = "0.0.3";
+
 
         #region Settings Class
 
@@ -856,8 +857,9 @@ namespace Oxide.Plugins {
                 else
                     PrintToChat(GetMsg("RulerLocation_Static"), currentRuler.displayName, rulerCoords);
             }
-            if (currentRuler == null) {
-                Timers.Add("RulerPromote", timer.Repeat(60, 0, () => TryForceRuler()));
+
+            if (currentRuler == null && BasePlayer.activePlayerList.Count > 0) {
+                timer.Once(60, () => TryForceRuler());
             }
         }
 
@@ -866,14 +868,14 @@ namespace Oxide.Plugins {
             if (currentRuler != null && !force) return false;
             Puts("fnr 2");
             int activePlayers = BasePlayer.activePlayerList.Count;
+            Puts("fnr 3");
             if (activePlayers > 0) {
-                int index = 0;
-                if (activePlayers > 1) {
-                    index = UnityEngine.Random.Range(0, activePlayers - 1);
-                }
-                Puts("fnr 3");
-                SetRuler(BasePlayer.activePlayerList[index]);
                 Puts("fnr 4");
+                int index = (activePlayers > 1) ? UnityEngine.Random.Range(0, activePlayers - 1) : 0;
+
+                Puts("fnr 5");
+                SetRuler(BasePlayer.activePlayerList[index]);
+                Puts("fnr 6");
             }
             return true;
         }
