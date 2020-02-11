@@ -7,9 +7,10 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.6")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.7")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
+        bool firstRun = false;
         public bool DebugMode = false;
         Ruler ruler;
         PSConfig config;
@@ -41,7 +42,7 @@ namespace Oxide.Plugins {
             }
         }
 
-        private class PSConfig {
+        public class PSConfig {
             public string Version;
             public bool showWelcomeMsg;
             public int maxHelis;
@@ -266,16 +267,19 @@ namespace Oxide.Plugins {
         protected Dictionary<string, Timer> Timers { get { return timers; } }
         #endregion
 
-        private void Loaded() {
-            _instance = this;
-            LoadServerMessages();
-            LoadRuler();
+        private void Init() {
             config = Config.ReadObject<PSConfig>();
+            LoadServerMessages();
 
-            if (!config.Version.Equals(ConfigVersion)) {
+            if (config != null && !firstRun && !config.Version.Equals(ConfigVersion)) {
                 Puts("Config outdated, will update to new version.");
                 config = UpgradeConfig(config.Version, ConfigVersion);
             }
+        }
+
+        private void Loaded() {
+            LoadRuler();
+            _instance = this;
 
             Puts("Political Survival is starting...");
 
@@ -861,20 +865,22 @@ namespace Oxide.Plugins {
             Puts("fnr 1");
             if (currentRuler != null && !force) return false;
             Puts("fnr 2");
-            int index = UnityEngine.Random.Range(0, BasePlayer.activePlayerList.Count - 1);
-            Puts("fnr 3");
-            SetRuler(BasePlayer.activePlayerList[index]);
-            Puts("fnr 4");
+            int activePlayers = BasePlayer.activePlayerList.Count;
+            if (activePlayers > 0) {
+                int index = 0;
+                if (activePlayers > 1) {
+                    index = UnityEngine.Random.Range(0, activePlayers - 1);
+                }
+                Puts("fnr 3");
+                SetRuler(BasePlayer.activePlayerList[index]);
+                Puts("fnr 4");
+            }
             return true;
         }
 
         #endregion
         void SaverRuler() {
             Interface.Oxide.DataFileSystem.WriteObject<Ruler>("PoliticalSurvival", ruler, true);
-        }
-
-        private void SaveConfig() {
-            Config.WriteObject<PSConfig>(config, true);
         }
 
         void LoadRuler() {
@@ -888,6 +894,7 @@ namespace Oxide.Plugins {
                 .SetRealmName(lang.GetMessage("DefaultRealm", this))
                 .SetTaxLevel(0.0)
                 .SetTaxContainerID(0)
+                .SetResourcesGot(0)
                 .SetTaxContainerVector3(Vector3.negativeInfinity);
                 SaverRuler();
             }
@@ -895,14 +902,17 @@ namespace Oxide.Plugins {
 
         T GetConfig<T>(string name, T defaultValue) => Config[name] == null ? defaultValue : (T)Convert.ChangeType(Config[name], typeof(T));
         protected override void LoadDefaultConfig() {
+            firstRun = true;
             Puts("Creating a new configuration file");
             Config.WriteObject(UpgradeConfig(), true);
             SaveConfig();
         }
-
+        private PSConfig GetDefaultConfig() {
+            return UpgradeConfig("", "");
+        }
         PSConfig UpgradeConfig(string oldVersion = "", string newVersion = "") {
 
-            if (!oldVersion.Equals("") || !newVersion.Equals("")) {
+            if ((!oldVersion.Equals("") || !newVersion.Equals("")) && !oldVersion.Equals(newVersion)) {
                 if (newVersion.Equals("0.0.2")) {
                     config.Version = ConfigVersion;
                     config.taxMin = 0;
@@ -913,20 +923,16 @@ namespace Oxide.Plugins {
                 }
             }
             return new PSConfig {
-                Version = "0.0.1",
+                Version = ConfigVersion,
                 showWelcomeMsg = false,
-
                 maxHelis = 2,
                 heliItemCost = 13994,
                 heliItemCostQty = 500,
-
                 broadcastRulerPosition = false,
                 broadcastRulerPositionAfter = 60,
                 broadcastRulerPositionAfterPercentage = 10,
-
                 taxMin = 0,
                 taxMax = 35,
-
                 taxSource = new TaxSource().createDefault()
             };
         }
