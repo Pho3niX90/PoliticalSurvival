@@ -264,3 +264,5 @@ __pycache__/
 .gitignore
 /MagicLoot.cs
 /MagicLoot.json
+/ExtraSeating.cs
+/MinicopterSeating - Copy.cs

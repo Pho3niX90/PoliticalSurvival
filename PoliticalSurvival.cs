@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.8")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.6.9")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         bool firstRun = false;
@@ -67,17 +67,19 @@ namespace Oxide.Plugins {
             public double tax;
             public ulong ruler;
             public string rulerName;
+            public ulong rulerId;
             public uint rulerSince;
             public int resourcesGot;
             public string realm;
 
-            public Ruler(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm) {
+            public Ruler(Vector3 tcv4, uint txId, double tx, ulong rlr, string rlrname, string rlm, ulong rid) {
                 taxContainerVector3 = tcv4;
                 taxContainerID = txId;
                 tax = tx;
                 ruler = rlr;
                 rulerName = rlrname;
                 realm = rlm;
+                rulerId = rid;
             }
 
             public Ruler() { }
@@ -258,7 +260,7 @@ namespace Oxide.Plugins {
 
         #region Variables
         Dictionary<string, string> serverMessages;
-        int worldSize;
+        int worldSize = 3500;
         BasePlayer currentRuler;
         uint rulerOfflineAt = 0;
         private ILocator liveLocator = null;
@@ -290,6 +292,11 @@ namespace Oxide.Plugins {
             locator = new LocatorWithDelay(liveLocator, 60);
 
 
+            if (ruler.GetRulerSince() == 0) {
+                ruler.SetRulerSince(_time.GetUnixTimestamp());
+                SaverRuler();
+            }
+
             Puts("Realm name is " + ruler.GetRealmName());
             Puts("Tax level is " + ruler.GetTaxLevel());
             Puts("Ruler is " + ruler.GetRuler());
@@ -298,18 +305,15 @@ namespace Oxide.Plugins {
             currentRuler = GetPlayer(ruler.GetRuler().ToString());
             Puts("Current ruler " + (currentRuler != null ? "is set" : "is null"));
 
-            if (ruler.GetRulerSince() == 0) {
-                ruler.SetRulerSince(_time.GetUnixTimestamp());
-                SaverRuler();
-            }
-
             Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
 
             SaverRuler();
             Puts($"Ruler offline at {rulerOfflineAt}");
-            if (rulerOfflineAt != 0) {
-                if (rulerOfflineAt != 0 && ruler.GetRulerOfflineMinutes() >= (1 * 60))
+            BasePlayer bplayer = BasePlayer.FindByID(ruler.rulerId);
+            if (rulerOfflineAt != 0 || bplayer == null || bplayer.IsConnected) {
+                if (ruler.GetRulerOfflineMinutes() >= (1 * 60) || (rulerOfflineAt == 0 && (bplayer == null || !bplayer.IsConnected))) {
                     TryForceNewRuler(true);
+                }
             }
         }
 
@@ -477,19 +481,33 @@ namespace Oxide.Plugins {
 
         [ChatCommand("fnr")]
         void TryForceRulerCmd(BasePlayer player, string command, string[] args) {
-            if (!player.IsAdmin || !IsRuler(player.userID)) return;
+            Puts("fnr1");
+            if (!player.IsAdmin || (!player.IsAdmin && !IsRuler(player.userID))) return;
+            Puts("fnr2");
             if (args.Length == 0) {
-                if (TryForceNewRuler(true))
+
+                Puts("fnr3.1");
+                if (TryForceNewRuler(true)) {
+                    Puts("fnr3.1.1");
                     PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
+                } else {
+                    Puts("fnr3.1.2");
+                    PrintToChat("Couldn't force a new ruler :(");
+                }
             } else if (args.Length == 1) {
+                Puts("fnr3.2");
                 BasePlayer ruler = null;
                 try {
+                    Puts("fnr3.2.s");
                     ruler = BasePlayer.Find(args[0]);
                 } catch (Exception e) {
-                    PrintToChat("ERR: " + lang.GetMessage("PlayerNotFound", this), args[0]);
+                    Puts("fnr3.2.e");
+                    PrintToChat(player, "ERR: " + lang.GetMessage("PlayerNotFound", this), args[0]);
+                    return;
                 }
 
                 if (ruler == null) { PrintToChat(lang.GetMessage("PlayerNotFound", this), args[0]); return; }
+                Puts("fnr4");
                 SetRuler(ruler);
                 PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
             }
@@ -701,7 +719,7 @@ namespace Oxide.Plugins {
             List<Item> collector = new List<Item>();
             currentRuler.inventory.Take(collector, config.heliItemCost, config.heliItemCostQty);
 
-            Puts("Spawn it");
+            Puts("Spawn the birdie");
             //spawn the birdie
             BaseHelicopter ent = GameManager.server.CreateEntity("assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab", new Vector3(), new Quaternion(), true) as BaseHelicopter;
             if (ent != null && playerToAttack != null) {
@@ -716,7 +734,15 @@ namespace Oxide.Plugins {
 
         void SetRuler(BasePlayer bpruler) {
             Puts("New Ruler! " + bpruler.displayName);
-            ruler.SetRuler(bpruler.userID).SetRulerName(bpruler.displayName).SetTaxContainerID(0).SetTaxContainerVector3(Vector3.negativeInfinity).SetRealmName(GetMsg("DefaultRealm")).SetRulerSince(_time.GetUnixTimestamp()).SetResourcesGot(0);
+            ruler
+                .SetRuler(bpruler.userID)
+                .SetRulerName(bpruler.displayName)
+                .SetTaxContainerID(0)
+                .SetTaxLevel(config.broadcastRulerPositionAfterPercentage)
+                .SetTaxContainerVector3(Vector3.negativeInfinity)
+                .SetRealmName(GetMsg("DefaultRealm"))
+                .SetRulerSince(_time.GetUnixTimestamp())
+                .SetResourcesGot(0);
             currentRuler = bpruler;
             SaverRuler();
         }
@@ -752,11 +778,12 @@ namespace Oxide.Plugins {
 
         #region Player Grid Coordinates and Locators
         public interface ILocator {
-            string GridReference(Component component, out bool moved);
+            string GridReference(Vector3 component, out bool moved);
         }
 
         public class RustIOLocator : ILocator {
             public RustIOLocator(int worldSize) {
+                worldSize = (worldSize != 0) ? worldSize : (ConVar.Server.worldsize > 0) ? ConVar.Server.worldsize : 3500;
                 translate = worldSize / 2f; //offset
                 gridWidth = (worldSize * 0.0066666666666667f);
                 scale = worldSize / gridWidth;
@@ -766,15 +793,20 @@ namespace Oxide.Plugins {
             private readonly float scale;
             private readonly float gridWidth;
 
-            public string GridReference(Component component, out bool moved) {
-                var pos = component.transform.position;
+            public string GridReference(Vector3 pos, out bool moved) {
                 float x = pos.x + translate;
                 float z = pos.z + translate;
 
                 int lat = (int)Math.Floor(x / scale); //letter
                 char latChar = (char)('A' + lat);
                 int lon = (int)Math.Round(gridWidth) - (int)Math.Floor(z / scale); //number
+                _instance.Puts("users: x=" + x);
+                _instance.Puts("users: z=" + z);
+                _instance.Puts("users: scale is " + scale);
+                _instance.Puts("users: gridWidth is " + gridWidth);
+                _instance.Puts("users: translate is " + translate + " worldsize is " + _instance.worldSize);
 
+                _instance.Puts("users grid is " + latChar + " " + lon);
                 moved = false; // We dont know, so just return false
                 return string.Format("{0}{1}", latChar, lon);
             }
@@ -788,26 +820,26 @@ namespace Oxide.Plugins {
 
             private readonly ILocator liveLocator;
             private readonly int updateInterval;
-            private readonly Dictionary<Component, ExpiringCoordinates> locations = new Dictionary<Component, ExpiringCoordinates>();
+            private readonly Dictionary<Vector3, ExpiringCoordinates> locations = new Dictionary<Vector3, ExpiringCoordinates>();
 
-            public string GridReference(Component component, out bool moved) {
+            public string GridReference(Vector3 pos, out bool moved) {
                 ExpiringCoordinates item = null;
                 bool m;
 
-                if (locations.ContainsKey(component)) {
-                    item = locations[component];
+                if (locations.ContainsKey(pos)) {
+                    item = locations[pos];
                     if (item.Expires < DateTime.Now) {
-                        string location = liveLocator.GridReference(component, out m);
+                        string location = liveLocator.GridReference(pos, out m);
                         item.GridChanged = item.Location != location;
                         item.Location = location;
                         item.Expires = DateTime.Now.AddSeconds(updateInterval);
                     }
                 } else {
                     item = new ExpiringCoordinates();
-                    item.Location = liveLocator.GridReference(component, out m);
+                    item.Location = liveLocator.GridReference(pos, out m);
                     item.GridChanged = true;
                     item.Expires = DateTime.Now.AddSeconds(updateInterval);
-                    locations.Add(component, item);
+                    locations.Add(pos, item);
                 }
 
                 moved = item.GridChanged;
@@ -849,7 +881,7 @@ namespace Oxide.Plugins {
                 BasePlayer ruler = BasePlayer.Find(currentRuler.UserIDString);
                 if (ruler == null) return;
                 string rulerMonument = FindMonument(ruler.transform.position)?.displayPhrase.english;
-                string rulerGrid = locator.GridReference(ruler, out moved);
+                string rulerGrid = locator.GridReference(ruler.transform.position, out moved);
                 string rulerCoords = rulerMonument != null && rulerMonument.Length > 0 ? rulerMonument : rulerGrid;
 
                 if (moved)
@@ -864,20 +896,22 @@ namespace Oxide.Plugins {
         }
 
         public bool TryForceNewRuler(bool force) {
-            Puts("fnr 1");
             if (currentRuler != null && !force) return false;
-            Puts("fnr 2");
-            int activePlayers = BasePlayer.activePlayerList.Count;
-            Puts("fnr 3");
-            if (activePlayers > 0) {
-                Puts("fnr 4");
-                int index = (activePlayers > 1) ? UnityEngine.Random.Range(0, activePlayers - 1) : 0;
-
-                Puts("fnr 5");
-                SetRuler(BasePlayer.activePlayerList[index]);
-                Puts("fnr 6");
+            BasePlayer player = GetRandomPlayer();
+            if (player != null) {
+                SetRuler(player);
+                return true;
             }
-            return true;
+            return false;
+        }
+
+        BasePlayer GetRandomPlayer() {
+            ListHashSet<BasePlayer> players = BasePlayer.activePlayerList;
+            int activePlayers = players.Count;
+            if (activePlayers > 1) {
+                return players[Core.Random.Range(0, activePlayers - 1)];
+            }
+            return activePlayers == 1 ? players.First() : null;
         }
 
         #endregion
