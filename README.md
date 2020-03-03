@@ -36,7 +36,7 @@ Become the ruler of the server, tax all players, and call in helis for support.
     "ExcavatorGather": true,
     "CollectiblePickup": true,
     "SurveyGather": true,
-	"worldSize" = 3500,
+	"worldSize": 3500,
     "chooseNewRulerOnDisconnect": true,
     "chooseNewRulerOnDisconnectMinutes": 60,
     "rulerCanChooseAnotherRuler": true
