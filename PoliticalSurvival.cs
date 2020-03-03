@@ -21,7 +21,7 @@ namespace Oxide.Plugins {
 
 
         #region Settings Class
-
+    
         public class TaxSource {
             public bool DispenserGather;
             public bool CropGather;
