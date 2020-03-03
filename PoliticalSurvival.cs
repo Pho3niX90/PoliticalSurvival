@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.6.9")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.7.0")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         bool firstRun = false;
@@ -126,6 +126,7 @@ namespace Oxide.Plugins {
             }
             public Ruler SetRuler(ulong rlr) {
                 ruler = rlr;
+                rulerId = rlr;
                 rulerSince = (new Core.Libraries.Time()).GetUnixTimestamp();
                 return this;
             }
@@ -136,7 +137,7 @@ namespace Oxide.Plugins {
                 return (new Core.Libraries.Time().GetUnixTimestamp() - rulerSince) / 60.0;
             }
             public double GetRulerOfflineMinutes() {
-                return (new Core.Libraries.Time().GetUnixTimestamp() - _instance.rulerOfflineAt) / 60.0;
+                return _instance.rulerOfflineAt == 0 ? 0.0 : ((new Core.Libraries.Time().GetUnixTimestamp() - _instance.rulerOfflineAt) / 60.0);
             }
             public Ruler SetRulerName(string name) {
                 rulerName = name;
@@ -274,9 +275,10 @@ namespace Oxide.Plugins {
             config = Config.ReadObject<PSConfig>();
             LoadServerMessages();
 
-            if (config != null && !firstRun && !config.Version.Equals(ConfigVersion)) {
+            if (config != null && !config.Version.Equals(ConfigVersion)) {
                 Puts("Config outdated, will update to new version.");
                 config = UpgradeConfig(config.Version, ConfigVersion);
+                SaveConfig();
             }
         }
 
@@ -286,7 +288,7 @@ namespace Oxide.Plugins {
 
             Puts("Political Survival is starting...");
 
-            worldSize = ConVar.Server.worldsize;
+            if(ConVar.Server.worldsize > 0) worldSize = ConVar.Server.worldsize;
 
             liveLocator = new RustIOLocator(worldSize);
             locator = new LocatorWithDelay(liveLocator, 60);
@@ -299,19 +301,24 @@ namespace Oxide.Plugins {
 
             Puts("Realm name is " + ruler.GetRealmName());
             Puts("Tax level is " + ruler.GetTaxLevel());
-            Puts("Ruler is " + ruler.GetRuler());
             Puts("TaxChest is set " + !ruler.GetTaxContainerVector3().Equals(Vector3.negativeInfinity));
             Puts("Political Survival: Started");
             currentRuler = GetPlayer(ruler.GetRuler().ToString());
             Puts("Current ruler " + (currentRuler != null ? "is set" : "is null"));
+            Puts("Ruler is " + ruler.GetRuler() + " ("+ currentRuler.displayName +")");
 
             Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
 
             SaverRuler();
             Puts($"Ruler offline at {rulerOfflineAt}");
-            BasePlayer bplayer = BasePlayer.FindByID(ruler.rulerId);
-            if (rulerOfflineAt != 0 || bplayer == null || bplayer.IsConnected) {
-                if (ruler.GetRulerOfflineMinutes() >= (1 * 60) || (rulerOfflineAt == 0 && (bplayer == null || !bplayer.IsConnected))) {
+            if (rulerOfflineAt != 0 || currentRuler == null || currentRuler.IsConnected) {
+                if (ruler.GetRulerOfflineMinutes() >= (1 * 60) || (rulerOfflineAt == 0 && (currentRuler == null || !currentRuler.IsConnected))) {
+                    Puts("ruler.GetRulerOfflineMinutes() " + ruler.GetRulerOfflineMinutes());
+                    Puts("rulerOfflineAt " + rulerOfflineAt);
+                    Puts("bplayer is null " + (currentRuler == null));
+                    if((currentRuler != null)) {
+                        Puts("bplayer.IsConnected " + currentRuler.IsConnected);
+                    }
                     TryForceNewRuler(true);
                 }
             }
@@ -343,7 +350,7 @@ namespace Oxide.Plugins {
             if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + ruler.GetRealmName());
             if (currentRuler != null && player.userID == currentRuler.userID) {
                 rulerOfflineAt = _time.GetUnixTimestamp();
-                timer.Once(1 * 60 * 60, () => {
+                timer.Once(1 * 60, () => {
                     if (rulerOfflineAt != 0 && ruler.GetRulerOfflineMinutes() >= (1 * 60)) //TODO make time changeable
                         TryForceNewRuler(true);
                 });
@@ -478,11 +485,14 @@ namespace Oxide.Plugins {
                 PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
         }
         #region Commands
-
+        [ConsoleCommand("ps.fnr")]
+        private void SuicideHandler(ConsoleSystem.Arg arg) {
+            TryForceRulerCmd(arg.Connection.player as BasePlayer, null, arg.Args);
+        }
         [ChatCommand("fnr")]
         void TryForceRulerCmd(BasePlayer player, string command, string[] args) {
             Puts("fnr1");
-            if (!player.IsAdmin || (!player.IsAdmin && !IsRuler(player.userID))) return;
+            if (player != null && !player.IsAdmin && !IsRuler(player.userID) && !player.isServer) return;
             Puts("fnr2");
             if (args.Length == 0) {
 
@@ -502,6 +512,7 @@ namespace Oxide.Plugins {
                     ruler = BasePlayer.Find(args[0]);
                 } catch (Exception e) {
                     Puts("fnr3.2.e");
+                    if(player!=null)
                     PrintToChat(player, "ERR: " + lang.GetMessage("PlayerNotFound", this), args[0]);
                     return;
                 }
@@ -877,11 +888,10 @@ namespace Oxide.Plugins {
         void AdviseRulerPosition() {
             if (currentRuler != null && (config.broadcastRulerPosition || (config.broadcastRulerPositionAfterPercentage > 0 && ruler.GetTaxLevel() > config.broadcastRulerPositionAfterPercentage))) {
                 bool moved;
-
-                BasePlayer ruler = BasePlayer.Find(currentRuler.UserIDString);
-                if (ruler == null) return;
-                string rulerMonument = FindMonument(ruler.transform.position)?.displayPhrase.english;
-                string rulerGrid = locator.GridReference(ruler.transform.position, out moved);
+                
+                if (currentRuler == null) return;
+                string rulerMonument = FindMonument(currentRuler.transform.position)?.displayPhrase.english;
+                string rulerGrid = locator.GridReference(currentRuler.transform.position, out moved);
                 string rulerCoords = rulerMonument != null && rulerMonument.Length > 0 ? rulerMonument : rulerGrid;
 
                 if (moved)
@@ -890,7 +900,7 @@ namespace Oxide.Plugins {
                     PrintToChat(GetMsg("RulerLocation_Static"), currentRuler.displayName, rulerCoords);
             }
 
-            if (currentRuler == null && BasePlayer.activePlayerList.Count > 0) {
+            if (currentRuler == null && BasePlayer.activePlayerList.Count > 0 || ruler.GetRulerOfflineMinutes() > 0 || !currentRuler.IsConnected) {
                 timer.Once(60, () => TryForceRuler());
             }
         }
