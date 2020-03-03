@@ -17,7 +17,7 @@ namespace Oxide.Plugins {
         private Core.Libraries.Time _time = GetLibrary<Core.Libraries.Time>();
         static PoliticalSurvival _instance;
         private List<Ruler> rulerList = new List<Ruler>();
-        string ConfigVersion = "0.0.3";
+        string ConfigVersion = "0.0.4";
 
 
         #region Settings Class
@@ -59,6 +59,11 @@ namespace Oxide.Plugins {
             public int taxMax;
 
             public TaxSource taxSource;
+
+            public int worldSize;
+            public bool chooseNewRulerOnDisconnect;
+            public int chooseNewRulerOnDisconnectMinutes;
+            public bool rulerCanChooseAnotherRuler = true;
         }
 
         public class Ruler {
@@ -287,8 +292,9 @@ namespace Oxide.Plugins {
             _instance = this;
 
             Puts("Political Survival is starting...");
-
-            if(ConVar.Server.worldsize > 0) worldSize = ConVar.Server.worldsize;
+            if (ConVar.Server.worldsize == 0)
+                Puts("WARNING: worldsize is reporting as 0, this is not possible and will default to config size. Please make sure the config has the correct size.");
+            if (ConVar.Server.worldsize > 0) worldSize = ConVar.Server.worldsize;
 
             liveLocator = new RustIOLocator(worldSize);
             locator = new LocatorWithDelay(liveLocator, 60);
@@ -305,20 +311,14 @@ namespace Oxide.Plugins {
             Puts("Political Survival: Started");
             currentRuler = GetPlayer(ruler.GetRuler().ToString());
             Puts("Current ruler " + (currentRuler != null ? "is set" : "is null"));
-            Puts("Ruler is " + ruler.GetRuler() + " ("+ currentRuler.displayName +")");
+            if(currentRuler != null) Puts("Ruler is " + ruler.GetRuler() + " (" + currentRuler.displayName + ")");
 
             Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
 
             SaverRuler();
             Puts($"Ruler offline at {rulerOfflineAt}");
             if (rulerOfflineAt != 0 || currentRuler == null || currentRuler.IsConnected) {
-                if (ruler.GetRulerOfflineMinutes() >= (1 * 60) || (rulerOfflineAt == 0 && (currentRuler == null || !currentRuler.IsConnected))) {
-                    Puts("ruler.GetRulerOfflineMinutes() " + ruler.GetRulerOfflineMinutes());
-                    Puts("rulerOfflineAt " + rulerOfflineAt);
-                    Puts("bplayer is null " + (currentRuler == null));
-                    if((currentRuler != null)) {
-                        Puts("bplayer.IsConnected " + currentRuler.IsConnected);
-                    }
+                if (config.chooseNewRulerOnDisconnect && (ruler.GetRulerOfflineMinutes() >= (1 * config.chooseNewRulerOnDisconnectMinutes) || (rulerOfflineAt == 0 && (currentRuler == null || !currentRuler.IsConnected)))) {
                     TryForceNewRuler(true);
                 }
             }
@@ -350,8 +350,8 @@ namespace Oxide.Plugins {
             if (config.showWelcomeMsg) PrintToChat(player.displayName + " " + lang.GetMessage("PlayerDisconnected", this, player.UserIDString) + " " + ruler.GetRealmName());
             if (currentRuler != null && player.userID == currentRuler.userID) {
                 rulerOfflineAt = _time.GetUnixTimestamp();
-                timer.Once(1 * 60, () => {
-                    if (rulerOfflineAt != 0 && ruler.GetRulerOfflineMinutes() >= (1 * 60)) //TODO make time changeable
+                timer.Once(60 * config.chooseNewRulerOnDisconnectMinutes, () => {
+                    if (rulerOfflineAt != 0 && ruler.GetRulerOfflineMinutes() >= (60 * (config.chooseNewRulerOnDisconnectMinutes - 1))) //TODO make time changeable
                         TryForceNewRuler(true);
                 });
             }
@@ -491,34 +491,27 @@ namespace Oxide.Plugins {
         }
         [ChatCommand("fnr")]
         void TryForceRulerCmd(BasePlayer player, string command, string[] args) {
-            Puts("fnr1");
-            if (player != null && !player.IsAdmin && !IsRuler(player.userID) && !player.isServer) return;
-            Puts("fnr2");
-            if (args.Length == 0) {
 
-                Puts("fnr3.1");
+            if (player != null && !player.IsAdmin && !player.isServer) return;
+            if (!IsRuler(player.userID) || !config.rulerCanChooseAnotherRuler) return;
+
+            if (args.Length == 0) {
                 if (TryForceNewRuler(true)) {
-                    Puts("fnr3.1.1");
                     PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
                 } else {
-                    Puts("fnr3.1.2");
                     PrintToChat("Couldn't force a new ruler :(");
                 }
             } else if (args.Length == 1) {
-                Puts("fnr3.2");
                 BasePlayer ruler = null;
                 try {
-                    Puts("fnr3.2.s");
                     ruler = BasePlayer.Find(args[0]);
                 } catch (Exception e) {
-                    Puts("fnr3.2.e");
-                    if(player!=null)
-                    PrintToChat(player, "ERR: " + lang.GetMessage("PlayerNotFound", this), args[0]);
+                    if (player != null)
+                        PrintToChat(player, "ERR: " + lang.GetMessage("PlayerNotFound", this), args[0]);
                     return;
                 }
 
                 if (ruler == null) { PrintToChat(lang.GetMessage("PlayerNotFound", this), args[0]); return; }
-                Puts("fnr4");
                 SetRuler(ruler);
                 PrintToChat("<color=#008080ff>{0}</color> has been made the new Ruler. Kill him!", currentRuler.displayName);
             }
@@ -811,13 +804,6 @@ namespace Oxide.Plugins {
                 int lat = (int)Math.Floor(x / scale); //letter
                 char latChar = (char)('A' + lat);
                 int lon = (int)Math.Round(gridWidth) - (int)Math.Floor(z / scale); //number
-                _instance.Puts("users: x=" + x);
-                _instance.Puts("users: z=" + z);
-                _instance.Puts("users: scale is " + scale);
-                _instance.Puts("users: gridWidth is " + gridWidth);
-                _instance.Puts("users: translate is " + translate + " worldsize is " + _instance.worldSize);
-
-                _instance.Puts("users grid is " + latChar + " " + lon);
                 moved = false; // We dont know, so just return false
                 return string.Format("{0}{1}", latChar, lon);
             }
@@ -888,7 +874,7 @@ namespace Oxide.Plugins {
         void AdviseRulerPosition() {
             if (currentRuler != null && (config.broadcastRulerPosition || (config.broadcastRulerPositionAfterPercentage > 0 && ruler.GetTaxLevel() > config.broadcastRulerPositionAfterPercentage))) {
                 bool moved;
-                
+
                 if (currentRuler == null) return;
                 string rulerMonument = FindMonument(currentRuler.transform.position)?.displayPhrase.english;
                 string rulerGrid = locator.GridReference(currentRuler.transform.position, out moved);
@@ -900,8 +886,8 @@ namespace Oxide.Plugins {
                     PrintToChat(GetMsg("RulerLocation_Static"), currentRuler.displayName, rulerCoords);
             }
 
-            if (currentRuler == null && BasePlayer.activePlayerList.Count > 0 || ruler.GetRulerOfflineMinutes() > 0 || !currentRuler.IsConnected) {
-                timer.Once(60, () => TryForceRuler());
+            if (config.chooseNewRulerOnDisconnect && (currentRuler == null && BasePlayer.activePlayerList.Count > 0 || ruler.GetRulerOfflineMinutes() > 0 || !currentRuler.IsConnected)) {
+                timer.Once(60 * config.chooseNewRulerOnDisconnectMinutes, () => TryForceRuler());
             }
         }
 
@@ -967,6 +953,13 @@ namespace Oxide.Plugins {
                     SaveConfig();
                     return config;
                 }
+
+                if (newVersion.Equals("0.0.4")) {
+                    config.worldSize = 3500;
+                    config.chooseNewRulerOnDisconnect = true;
+                    config.chooseNewRulerOnDisconnectMinutes = 60;
+                    config.rulerCanChooseAnotherRuler = true;
+                }
             }
             return new PSConfig {
                 Version = ConfigVersion,
@@ -979,7 +972,11 @@ namespace Oxide.Plugins {
                 broadcastRulerPositionAfterPercentage = 10,
                 taxMin = 0,
                 taxMax = 35,
-                taxSource = new TaxSource().createDefault()
+                taxSource = new TaxSource().createDefault(),
+                worldSize = 3500,
+                chooseNewRulerOnDisconnect = true,
+                chooseNewRulerOnDisconnectMinutes = 60,
+                rulerCanChooseAnotherRuler = true
             };
         }
 
