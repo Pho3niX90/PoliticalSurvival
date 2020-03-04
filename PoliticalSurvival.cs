@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.7.0")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.7.1")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         bool firstRun = false;
@@ -959,6 +959,8 @@ namespace Oxide.Plugins {
                     config.chooseNewRulerOnDisconnect = true;
                     config.chooseNewRulerOnDisconnectMinutes = 60;
                     config.rulerCanChooseAnotherRuler = true;
+                    SaveConfig();
+                    return config;
                 }
             }
             return new PSConfig {
