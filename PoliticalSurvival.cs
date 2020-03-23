@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.7.1")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.7.3")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         bool firstRun = false;
@@ -21,7 +21,7 @@ namespace Oxide.Plugins {
 
 
         #region Settings Class
-    
+
         public class TaxSource {
             public bool DispenserGather;
             public bool CropGather;
@@ -272,8 +272,7 @@ namespace Oxide.Plugins {
         private ILocator liveLocator = null;
         private ILocator locator = null;
         private bool Changed = false;
-        private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
-        protected Dictionary<string, Timer> Timers { get { return timers; } }
+        protected Dictionary<string, Timer> Timers { get; } = new Dictionary<string, Timer>();
         #endregion
 
         private void Init() {
@@ -311,7 +310,7 @@ namespace Oxide.Plugins {
             Puts("Political Survival: Started");
             currentRuler = GetPlayer(ruler.GetRuler().ToString());
             Puts("Current ruler " + (currentRuler != null ? "is set" : "is null"));
-            if(currentRuler != null) Puts("Ruler is " + ruler.GetRuler() + " (" + currentRuler.displayName + ")");
+            if (currentRuler != null) Puts("Ruler is " + ruler.GetRuler() + " (" + currentRuler.displayName + ")");
 
             Timers.Add("AdviseRulerPosition", timer.Repeat(Math.Max(config.broadcastRulerPositionAfter, 60), 0, () => AdviseRulerPosition()));
 
@@ -334,9 +333,9 @@ namespace Oxide.Plugins {
 
             SaverRuler();
 
-            foreach (Timer t in timers.Values)
+            foreach (Timer t in Timers.Values)
                 t.Destroy();
-            timers.Clear();
+            Timers.Clear();
         }
 
         void OnPlayerInit(BasePlayer player) {
@@ -351,7 +350,7 @@ namespace Oxide.Plugins {
             if (currentRuler != null && player.userID == currentRuler.userID) {
                 rulerOfflineAt = _time.GetUnixTimestamp();
                 timer.Once(60 * config.chooseNewRulerOnDisconnectMinutes, () => {
-                    if (rulerOfflineAt != 0 && ruler.GetRulerOfflineMinutes() >= (60 * (config.chooseNewRulerOnDisconnectMinutes - 1))) //TODO make time changeable
+                    if (rulerOfflineAt != 0)
                         TryForceNewRuler(true);
                 });
             }
@@ -443,6 +442,7 @@ namespace Oxide.Plugins {
         }
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info) {
+
             if (entity == null) return;
             BasePlayer player = entity as BasePlayer;
 
@@ -462,10 +462,8 @@ namespace Oxide.Plugins {
             if (player != null) {
                 if (IsRuler(player.userID)) {
                     BasePlayer killer = null;
-                    Puts("Pol test 1");
                     if (info != null)
                         killer = info.Initiator as BasePlayer;
-                    Puts("Pol test 2");
 
                     if (killer != null && killer.userID != player.userID && !(killer is NPCPlayer)) {
                         SetRuler(killer);
@@ -492,8 +490,11 @@ namespace Oxide.Plugins {
         [ChatCommand("fnr")]
         void TryForceRulerCmd(BasePlayer player, string command, string[] args) {
 
-            if (player != null && !player.IsAdmin && !player.isServer) return;
-            if (!IsRuler(player.userID) || !config.rulerCanChooseAnotherRuler) return;
+            if (!player.IsAdmin) {
+                Puts($"Player {player.displayName} tried using fnr");
+                return;
+            }
+            //if (player != null && !player.IsAdmin && !player.isServer && (!IsRuler(player.userID) || !config.rulerCanChooseAnotherRuler)) return;
 
             if (args.Length == 0) {
                 if (TryForceNewRuler(true)) {
