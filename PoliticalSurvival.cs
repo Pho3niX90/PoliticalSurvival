@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("PoliticalSurvival", "Pho3niX90", "0.7.3")]
+    [Info("PoliticalSurvival", "Pho3niX90", "0.7.5")]
     [Description("Political Survival - Become the ruler, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin {
         bool firstRun = false;
@@ -376,7 +376,7 @@ namespace Oxide.Plugins {
             item.amount = (netAmount > 0) ? netAmount : item.amount;
         }
 
-        void OnCropGather(PlantEntity plant, Item item, BasePlayer player) {
+        void OnGrowableGather(GrowableEntity plant, Item item, BasePlayer player) {
             if (!config.taxSource.CropGather) return;
 
             DebugLog("OnPlantGather start");
@@ -886,10 +886,11 @@ namespace Oxide.Plugins {
                 else
                     PrintToChat(GetMsg("RulerLocation_Static"), currentRuler.displayName, rulerCoords);
             }
-
+            /*
             if (config.chooseNewRulerOnDisconnect && (currentRuler == null && BasePlayer.activePlayerList.Count > 0 || ruler.GetRulerOfflineMinutes() > 0 || !currentRuler.IsConnected)) {
                 timer.Once(60 * config.chooseNewRulerOnDisconnectMinutes, () => TryForceRuler());
             }
+            */
         }
 
         public bool TryForceNewRuler(bool force) {
